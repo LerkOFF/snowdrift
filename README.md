@@ -1,12 +1,12 @@
 # Snowdrift ❄️
 
-Снегопад поверх всех окон macOS. Снег ложится на верхние кромки окон, сползает при движении окна, а когда сугробы внизу вырастают, выезжает снегоуборщик. Клики проходят сквозь, иконки в Dock нет, управление из меню-бара.
+Снегопад поверх всех окон на macOS и Windows. Снег ложится на верхние кромки окон, сползает вслед за окном, тает, разлетается от курсора. Когда сугробы внизу вырастают, выезжает снегоуборщик. Клики проходят сквозь, иконки в Dock нет, управление из меню-бара (macOS) или системного трея (Windows).
 
-Snowfall for macOS: snow piles up on top of your windows, slides off when you move them, and a snowplow clears the pile at the bottom of the screen. Click-through, menu bar only.
+Snowfall for macOS and Windows: snow piles up on top of your windows, slides off when you move them, melts, flies apart under the cursor, and a snowplow clears the pile at the bottom of the screen. Click-through, menu bar or tray only.
 
 ## Установка
 
-Одной командой:
+### macOS
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/LerkOFF/snowdrift/main/install.sh | bash
@@ -17,28 +17,48 @@ curl -fsSL https://raw.githubusercontent.com/LerkOFF/snowdrift/main/install.sh |
 
 Нужна macOS 13 или новее, Apple Silicon или Intel. Можно и вручную: скачать `Snowdrift.zip` из [Releases](https://github.com/LerkOFF/snowdrift/releases/latest), распаковать и открыть.
 
+### Windows
+
+В PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/LerkOFF/snowdrift/main/install.ps1 | iex
+```
+
+Скрипт скачивает `Snowdrift.exe`, копирует его в `%LOCALAPPDATA%\Programs\Snowdrift`, добавляет ярлык в меню «Пуск» и запись в «Установку и удаление программ» и запускает. Права администратора не нужны.
+Удалить: «Параметры, Приложения» или `& "$env:LOCALAPPDATA\Programs\Snowdrift\Snowdrift.exe" --uninstall`.
+
+Нужна Windows 10 или новее, x64. Можно и вручную: скачать `Snowdrift.exe` из [Releases](https://github.com/LerkOFF/snowdrift/releases/latest) и запустить с ключом `--install`.
+
 ## Что умеет
 
-- Снежинки с глубиной: дальние мелкие и медленные, ближние крупные, у каждой своё покачивание.
-- Сугробы на верхней кромке каждого окна. Окно двигается, и снег сдвигается вместе с ним. Резкий рывок стряхивает часть снега, пропавшее окно осыпается целиком.
-- Снегоуборщик: когда снега внизу много, едет вдоль нижнего края, сгребает его в вал и сбрасывает за край экрана.
-- Курсор над Dock: под ним вырастает иконка, и снег рядом разлетается в стороны.
-- Меню-бар: пауза, три плотности снега (лёгкий, обычный, метель), копить снег на окнах или нет, стряхнуть сугробы, вызвать снегоуборщик.
-
-Интерфейс на русском или английском по языку системы.
+- Снег с глубиной и разной плотностью: от лёгкого до метели; режимы снега, осенних листьев, дождя, сакуры и Хеллоуина.
+- Сугробы на верхней кромке каждого окна. Окно двигается, и снег сдвигается вместе с ним, рывок стряхивает часть, закрытое окно осыпается целиком.
+- Курсор разгребает сугроб и поднимает снежную пыль.
+- Снегоуборщик: когда снега внизу много, едет вдоль нижнего края, сгребает его в вал и сбрасывает за край экрана. Вызвать можно из меню.
+- Курсор над Dock или панелью задач: снег рядом разлетается в стороны.
+- Таяние, прозрачность, скрытие от скриншотов, запуск при входе в систему.
+- Круглое стартовое окно, которое при нажатии рассыпается снегом.
+- Девять языков интерфейса по языку системы.
 
 ## Сборка из исходников
 
-Нужны Command Line Tools (`xcode-select --install`).
+macOS (нужны Command Line Tools: `xcode-select --install`):
 
 ```bash
-./build.sh                 # build/Snowdrift.app под архитектуру этого Mac
-UNIVERSAL=1 ./build.sh     # arm64 и x86_64 сразу
+./build.sh                 # build/Snowdrift.app, arm64 и x86_64
 open build/Snowdrift.app
 ```
 
-Весь код в `Sources/main.swift`, без зависимостей. `Snowdrift --version` печатает версию.
+Windows (Rust, из любой ОС, кросс-сборка через `cargo-xwin`):
+
+```bash
+cd windows
+cargo xwin build --release --target x86_64-pc-windows-msvc --bin Snowdrift
+```
+
+Общая симуляция снега лежит в `core/` (Rust, `cargo test` в этой папке), версия в файле `VERSION`.
 
 ## Лицензия
 
-MIT, см. [LICENSE](LICENSE).
+Код, добавленный в этом репозитории, под MIT, см. [LICENSE](LICENSE). Движок снегопада основан на [Snowhush](https://github.com/mbezruchko/Snowhush) Михаила Безручко (PolyForm Noncommercial 1.0.0) и используется с разрешения автора, подробности в [NOTICE](NOTICE).

@@ -61,6 +61,8 @@ pub enum Command {
     ReleaseSnowfall,
     /// Blows all the snow away; when calm, for less motion, melts it where it lies instead.
     ClearSnow(bool),
+    /// Sends the snowplow along the ground of every display.
+    CallPlow,
     /// Halloween turned on or off from the menu.
     Halloween(Choice),
     /// Other kinds fall, once a gust has blown what is there away; when calm, for less motion, it melts where it
@@ -205,7 +207,7 @@ fn run_loop(commands: &Receiver<Command>, links: &Links, mut settings: Settings)
                 }
                 Command::ShowInScreenshots(on) => {
                     settings.show_in_screenshots = on;
-                    screens.iter().for_each(|screen| screen.show_in_screenshots(on));
+                    screens.iter_mut().for_each(|screen| screen.show_in_screenshots(on));
                 }
                 Command::Scatter(pieces) => {
                     let Some(first) = pieces.first() else { continue };
@@ -222,6 +224,7 @@ fn run_loop(commands: &Receiver<Command>, links: &Links, mut settings: Settings)
                     settings.welcomed = true;
                     screens.iter_mut().for_each(|screen| screen.simulation.set_snowfall_held(false));
                 }
+                Command::CallPlow => screens.iter_mut().for_each(|screen| screen.simulation.start_plow()),
                 Command::ClearSnow(calm) => {
                     let direction = screens.first().map_or(-1.0, |screen| screen.simulation.breeze_direction());
                     screens.iter_mut().for_each(|screen| screen.simulation.blow_away(direction, calm));
@@ -717,6 +720,7 @@ fn new_simulation(monitor: &Monitor, settings: &Settings) -> SnowSimulation {
     let mut simulation = SnowSimulation::new(width as f32, height as f32, settings.intensity as f32 / 100.0);
     simulation.thaws = settings.melt;
     simulation.accumulates = settings.accumulates();
+    simulation.auto_plow = true;
     simulation.ground_settles = settings.ground;
     simulation.falling_opacity = settings.opacity as f32 / 100.0;
     simulation.set_snowfall_held(!settings.welcomed);

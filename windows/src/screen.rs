@@ -26,6 +26,7 @@ use snowdrift_core::simulation::{Pace, SnowSimulation, WindowId, WindowSurface};
 
 use crate::desktop::DesktopLayer;
 use crate::light::{Backdrop, Sky, Wallpapers};
+use crate::plow::PlowWindow;
 use crate::log;
 use crate::prefs::Settings;
 use crate::render::{Ambient, Gpu, LANTERN_REACH, Surface};
@@ -248,6 +249,9 @@ pub struct Screen {
     behind_taskbar: bool,
     /// Where the cursor's candlelight was last drawn.
     lantern_at: V2,
+    /// The snowplow's body, made the first time one comes out.
+    plow: Option<PlowWindow>,
+    shown_in_screenshots: bool,
 }
 
 impl Screen {
@@ -289,6 +293,8 @@ impl Screen {
             layer,
             behind_taskbar: settings.behind_taskbar,
             lantern_at: V2::new(-10_000.0, -10_000.0),
+            plow: None,
+            shown_in_screenshots: settings.show_in_screenshots,
         })
     }
 
@@ -319,6 +325,7 @@ impl Screen {
         }
         let cursor = self.cursor();
         let changed = self.simulation.step(dt, cursor);
+        self.follow_plow();
         // Nothing to draw and nothing on its way: the frame shown last stays up, as it would, till the snow is stirred.
         if !changed && self.simulation.is_empty() {
             self.fade(gpu, dt, true);
@@ -528,8 +535,30 @@ impl Screen {
         self.next_due = 0;
     }
 
-    pub fn show_in_screenshots(&self, shown: bool) {
+    pub fn show_in_screenshots(&mut self, shown: bool) {
+        self.shown_in_screenshots = shown;
         set_capture(self.overlay.0, shown);
+        if let Some(plow) = &self.plow {
+            plow.show_in_screenshots(shown);
+        }
+    }
+
+    /// Puts the snowplow's body where the simulated plow is, or takes it away when there is none.
+    fn follow_plow(&mut self) {
+        let plow = self.simulation.plow().filter(|_| self.layer.is_none() && !self.hidden());
+        if plow.is_none() && self.plow.is_none() {
+            return;
+        }
+        if self.plow.is_none() {
+            self.plow = PlowWindow::new(self.shown_in_screenshots).ok();
+        }
+        let (physical_width, _) = physical_size(&self.monitor);
+        let pixels_per_dip = physical_width as f32 / self.size.0 as f32;
+        let scale = self.monitor.dpi.max(96) as f32 / 96.0;
+        let (left, bottom) = (self.monitor.rect.left as f32, self.monitor.rect.bottom as f32);
+        if let Some(window) = &mut self.plow {
+            window.update(plow, left, bottom, pixels_per_dip, scale);
+        }
     }
 
     /// Topmost windows opened later stack above; this puts the snow back on top of them, though still under open menus,
@@ -846,7 +875,7 @@ fn register_class() -> Result<()> {
     Ok(())
 }
 
-fn set_capture(window: HWND, shown: bool) {
+pub(crate) fn set_capture(window: HWND, shown: bool) {
     unsafe {
         let _ = SetWindowDisplayAffinity(window, if shown { WDA_NONE } else { WDA_EXCLUDEFROMCAPTURE });
     }

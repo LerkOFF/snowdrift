@@ -50,6 +50,7 @@ const ID_BEHIND: u32 = 205;
 const ID_QUIT: u32 = 299;
 const ID_UPDATES: u32 = 206;
 const ID_CLEAR: u32 = 207;
+const ID_PLOW: u32 = 290;
 const ID_HALLOWEEN: u32 = 208;
 const ID_TASKBAR: u32 = 209;
 const ID_SNOW: u32 = 210;
@@ -454,6 +455,9 @@ fn entries(settings: &Settings, login: bool, sliders: bool) -> Vec<Entry> {
     if !heaps.is_empty() {
         entries.push(Entry::item(ID_CLEAR, text::kinds("clear", &heaps), false, true));
     }
+    if settings.accumulates() && settings.ground {
+        entries.push(Entry::item(ID_PLOW, tr("plow"), false, true));
+    }
     entries.extend([
         Entry::Separator,
         Entry::Submenu { label: tr("settings").to_string(), entries: options },
@@ -544,6 +548,11 @@ fn choose(window: HWND, chosen: u32, login: bool) {
         0 => {}
         ID_QUIT => quit(window),
         ID_UPDATES => check_for_updates(window, true),
+        ID_PLOW => APP.with_borrow(|app| {
+            if let Some(app) = app {
+                send(app, Command::CallPlow);
+            }
+        }),
         ID_CLEAR => APP.with_borrow(|app| {
             if let Some(app) = app {
                 send(app, Command::ClearSnow(!prefs::animations_enabled()));

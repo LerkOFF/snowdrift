@@ -4,11 +4,13 @@
 use std::mem::size_of;
 
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, POINT, SIZE};
-use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_PIXEL_FORMAT};
+use windows::Win32::Graphics::Direct2D::Common::{
+    D2D_RECT_F, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_GRADIENT_STOP, D2D1_PIXEL_FORMAT,
+};
 use windows::Win32::Graphics::Direct2D::{
-    D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, D2D1_DRAW_TEXT_OPTIONS_NONE, D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_FEATURE_LEVEL_DEFAULT,
+    D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, D2D1_DRAW_TEXT_OPTIONS_NONE, D2D1_ELLIPSE, D2D1_EXTEND_MODE_CLAMP, D2D1_GAMMA_2_2, D2D1_LAYER_PARAMETERS, D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES, D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_FEATURE_LEVEL_DEFAULT,
     D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_RENDER_TARGET_USAGE_NONE, D2D1_ROUNDED_RECT,
-    D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE, D2D1CreateFactory, ID2D1Factory, ID2D1RenderTarget,
+    D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1CreateFactory, ID2D1Factory, ID2D1RenderTarget,
 };
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_STRETCH, DWRITE_FONT_STRETCH_CONDENSED, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL,
@@ -35,11 +37,12 @@ use windows_numerics::Vector2;
 
 /// Room around the card for its shadow.
 pub const MARGIN: f32 = 36.0;
-const BACKGROUND: [f32; 3] = [0.105, 0.088, 0.072];
-const INK: [f32; 3] = [0.93, 0.9, 0.85];
-const MUTED: [f32; 3] = [0.78, 0.75, 0.7];
-const LABEL: [f32; 3] = [0.09, 0.075, 0.06];
-const BUTTON: (f32, f32) = (190.0, 44.0);
+const NIGHT_TOP: [f32; 3] = [0.035, 0.055, 0.125];
+const NIGHT_BOTTOM: [f32; 3] = [0.115, 0.17, 0.30];
+const INK: [f32; 3] = [0.96, 0.97, 1.0];
+const MUTED: [f32; 3] = [0.80, 0.85, 0.93];
+const LABEL: [f32; 3] = [0.05, 0.09, 0.19];
+const BUTTON: (f32, f32) = (176.0, 40.0);
 /// The least room above and below the content when a card grows to fit it.
 const PADDING: f32 = 24.0;
 const ICON: &[u8] = include_bytes!("../assets/icon-256.png");
@@ -135,53 +138,113 @@ impl Card {
     fn draw(&self, target: &ID2D1RenderTarget, content: &Content) -> Result<Hits> {
         let card = D2D_RECT_F { left: MARGIN, top: MARGIN, right: MARGIN + self.width, bottom: MARGIN + self.height };
         let brush = |rgb: [f32; 3], alpha: f32| unsafe { target.CreateSolidColorBrush(&color(rgb, alpha), None) };
+        let radius = self.width.min(self.height) / 2.0;
+        let (cx, cy) = (card.left + self.width / 2.0, card.top + self.height / 2.0);
+        let disc = |grow: f32, dy: f32| D2D1_ELLIPSE { point: Vector2 { X: cx, Y: cy + dy }, radiusX: radius + grow, radiusY: radius + grow };
         unsafe {
-            // A soft shadow from stacked translucent outlines, lighter as they spread.
+            // A soft shadow from stacked translucent circles, lighter as they spread.
             let shade = brush([0.0; 3], 0.022)?;
             for step in 0..16 {
-                let spread = step as f32 * 1.6;
-                let rect = D2D_RECT_F {
-                    left: card.left - spread,
-                    top: card.top - spread + 10.0,
-                    right: card.right + spread,
-                    bottom: card.bottom + spread + 10.0,
-                };
-                target.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect, radiusX: 18.0 + spread, radiusY: 18.0 + spread }, &shade);
+                target.FillEllipse(&disc(step as f32 * 1.6 - 0.5, 10.0), &shade);
             }
-            let inset = D2D_RECT_F { left: card.left + 0.5, top: card.top + 0.5, right: card.right - 0.5, bottom: card.bottom - 0.5 };
-            let shape = D2D1_ROUNDED_RECT { rect: inset, radiusX: 18.0, radiusY: 18.0 };
-            target.FillRoundedRectangle(&shape, &brush(BACKGROUND, 1.0)?);
-            target.DrawRoundedRectangle(&shape, &brush([1.0; 3], 0.08)?, 1.0, None);
 
-            let body_width = (self.width - 64.0).min(330.0);
+            // The night sky: dark at the top, brighter toward the horizon.
+            let stops = [
+                D2D1_GRADIENT_STOP { position: 0.0, color: color(NIGHT_TOP, 1.0) },
+                D2D1_GRADIENT_STOP { position: 1.0, color: color(NIGHT_BOTTOM, 1.0) },
+            ];
+            let collection = target.CreateGradientStopCollection(&stops, D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP)?;
+            let sky = target.CreateLinearGradientBrush(
+                &D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES {
+                    startPoint: Vector2 { X: cx, Y: card.top },
+                    endPoint: Vector2 { X: cx, Y: card.bottom },
+                },
+                None,
+                &collection,
+            )?;
+            target.FillEllipse(&disc(-0.5, 0.0), &sky);
+
+            // Everything inside the circle is clipped to it.
+            let circle = self.d2d.CreateEllipseGeometry(&disc(-0.5, 0.0))?;
+            let layer = target.CreateLayer(None)?;
+            target.PushLayer(
+                &D2D1_LAYER_PARAMETERS {
+                    contentBounds: card,
+                    geometricMask: std::mem::ManuallyDrop::new(Some(circle.cast()?)),
+                    maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                    maskTransform: windows_numerics::Matrix3x2::identity(),
+                    opacity: 1.0,
+                    opacityBrush: std::mem::ManuallyDrop::new(None),
+                    layerOptions: Default::default(),
+                },
+                &layer,
+            );
+
+            let body_width = (self.width - 150.0).min(300.0);
             let (title, body) = self.texts(content)?;
             let label =
-                self.layout(content.button, w!("Segoe UI"), DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STRETCH_NORMAL, 12.5, BUTTON.0, 0.0, 1.8)?;
+                self.layout(content.button, w!("Segoe UI"), DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STRETCH_NORMAL, 12.0, BUTTON.0, 0.0, 1.8)?;
             label.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
             label.SetMaxHeight(BUTTON.1)?;
             let (title_height, body_height) = (height(&title)?, height(&body)?);
+            let total = content.icon + 8.0 + title_height + 12.0 + body_height + 22.0 + BUTTON.1;
+            let top = card.top + (self.height - total) / 2.0 - 10.0;
 
-            let total = content.icon + 10.0 + title_height + 18.0 + body_height + 28.0 + BUTTON.1;
-            let mut y = card.top + (self.height - total) / 2.0;
+            // Stars and still flakes, kept clear of the text.
+            let white = brush([1.0; 3], 1.0)?;
+            let mut seed = 0x9e37_79b9_u32;
+            let mut next = move || {
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (seed >> 8) as f32 / 16_777_216.0
+            };
+            for _ in 0..70 {
+                let (x, y, size, alpha) = (card.left + next() * self.width, card.top + next() * self.height, 0.8 + next() * 1.8, 0.25 + next() * 0.6);
+                let in_text = x > cx - body_width / 2.0 - 12.0 && x < cx + body_width / 2.0 + 12.0 && y > top - 4.0 && y < top + total + 4.0;
+                if in_text || y > card.bottom - 56.0 {
+                    continue;
+                }
+                white.SetOpacity(alpha);
+                target.FillEllipse(&D2D1_ELLIPSE { point: Vector2 { X: x, Y: y }, radiusX: size, radiusY: size }, &white);
+            }
+
+            // Two drifts along the bottom of the circle.
+            for (rise, shade, alpha) in [(70.0_f32, [0.62, 0.72, 0.88], 0.55), (46.0, [0.96, 0.98, 1.0], 0.95)] {
+                let shade = brush(shade, alpha)?;
+                let lift = if alpha < 0.9 { 34.0 } else { 0.0 };
+                target.FillEllipse(
+                    &D2D1_ELLIPSE {
+                        point: Vector2 { X: cx + if alpha < 0.9 { 80.0 } else { -50.0 }, Y: card.bottom - rise + self.height * 0.62 - lift },
+                        radiusX: radius * 1.15,
+                        radiusY: self.height * 0.62,
+                    },
+                    &shade,
+                );
+            }
+
+            let mut y = top;
             let icon = target.CreateBitmapFromWicBitmap(&self.icon, None)?;
-            let left = card.left + (self.width - content.icon) / 2.0;
+            let left = cx - content.icon / 2.0;
             let rect = D2D_RECT_F { left, top: y, right: left + content.icon, bottom: y + content.icon };
             target.DrawBitmap(&icon, Some(&rect), 1.0, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, None);
-            y += content.icon + 10.0;
-            target.DrawTextLayout(Vector2 { X: card.left + 32.0, Y: y }, &title, &brush(INK, 1.0)?, D2D1_DRAW_TEXT_OPTIONS_NONE);
-            y += title_height + 18.0;
+            y += content.icon + 8.0;
+            target.DrawTextLayout(Vector2 { X: cx - (self.width - 150.0) / 2.0, Y: y }, &title, &brush(INK, 1.0)?, D2D1_DRAW_TEXT_OPTIONS_NONE);
+            y += title_height + 12.0;
             let muted = brush(MUTED, 1.0)?;
-            target.DrawTextLayout(Vector2 { X: card.left + (self.width - body_width) / 2.0, Y: y }, &body, &muted, D2D1_DRAW_TEXT_OPTIONS_NONE);
-            y += body_height + 28.0;
+            target.DrawTextLayout(Vector2 { X: cx - body_width / 2.0, Y: y }, &body, &muted, D2D1_DRAW_TEXT_OPTIONS_NONE);
+            y += body_height + 22.0;
 
-            let left = card.left + (self.width - BUTTON.0) / 2.0;
+            let left = cx - BUTTON.0 / 2.0;
             let button = D2D_RECT_F { left, top: y, right: left + BUTTON.0, bottom: y + BUTTON.1 };
             let fill = if content.pressed { INK.map(|c| c * 0.88) } else { INK };
-            target.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: button, radiusX: 2.0, radiusY: 2.0 }, &brush(fill, 1.0)?);
+            target.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: button, radiusX: BUTTON.1 / 2.0, radiusY: BUTTON.1 / 2.0 }, &brush(fill, 1.0)?);
             target.DrawTextLayout(Vector2 { X: left, Y: y }, &label, &brush(LABEL, 1.0)?, D2D1_DRAW_TEXT_OPTIONS_NONE);
+            target.PopLayer();
+
+            // A thin ring at the edge.
+            target.DrawEllipse(&disc(-1.0, 0.0), &brush([1.0; 3], 0.16)?, 1.0, None);
 
             let close = content.closable.then(|| {
-                let (x, y, arm) = (card.right - 28.0, card.top + 28.0, 5.5);
+                let (x, y, arm) = (card.right - 60.0, card.top + 60.0, 5.5);
                 for (dx, dy) in [(arm, arm), (arm, -arm)] {
                     target.DrawLine(Vector2 { X: x - dx, Y: y - dy }, Vector2 { X: x + dx, Y: y + dy }, &muted, 1.4, None);
                 }
@@ -196,14 +259,14 @@ impl Card {
         let mut tallest = least;
         for content in contents {
             let (title, body) = self.texts(content)?;
-            let total = content.icon + 10.0 + height(&title)? + 18.0 + height(&body)? + 28.0 + BUTTON.1;
+            let total = content.icon + 8.0 + height(&title)? + 12.0 + height(&body)? + 22.0 + BUTTON.1;
             tallest = tallest.max((total + 2.0 * PADDING).ceil());
         }
         Ok(tallest)
     }
 
     fn texts(&self, content: &Content) -> Result<(IDWriteTextLayout, IDWriteTextLayout)> {
-        let text_width = self.width - 64.0;
+        let text_width = self.width - 150.0;
         let title = self.layout(
             content.title,
             w!("Bahnschrift"),
@@ -215,7 +278,7 @@ impl Card {
             0.6,
         )?;
         let body =
-            self.layout(content.body, w!("Segoe UI"), DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 13.5, text_width.min(330.0), 23.0, 0.0)?;
+            self.layout(content.body, w!("Segoe UI"), DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 13.5, text_width.min(300.0), 21.0, 0.0)?;
         Ok((title, body))
     }
 

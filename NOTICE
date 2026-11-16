@@ -1,0 +1,16 @@
+Snowdrift
+Copyright (c) 2026 LerkOFF
+
+The snowfall engine (the simulation core in `core/`, the Metal renderer and
+window tracking in `Sources/Snowdrift/`, and the Windows app in `windows/`) is
+derived from Snowhush, https://github.com/mbezruchko/Snowhush, used with the
+permission of its author.
+
+Snowhush is licensed under the PolyForm Noncommercial License 1.0.0
+(https://polyformproject.org/licenses/noncommercial/1.0.0/).
+
+Required Notice: Copyright 2026 Mykhailo Bezruchko
+
+The snowplow, the scattering of snow over the Dock and taskbar, the round
+welcome window, the install scripts and the rest of what was added on top are
+available under the MIT License, see LICENSE.

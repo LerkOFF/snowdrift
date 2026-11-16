@@ -18,7 +18,7 @@ fn main() {
     }
     let version = env!("CARGO_PKG_VERSION");
     let icon_file = std::fs::read(ICON).expect("icon");
-    for (binary, description) in [("Snowdrift", "Snowdrift"), ("Snowdrift-Setup", "Snowdrift Setup")] {
+    for (binary, description) in [("Snowdrift", "Snowdrift")] {
         // A .res file opens with an empty entry.
         let mut res = vec![0, 0, 0, 0, 32, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0xFF, 0xFF, 0, 0];
         res.extend([0; 16]);

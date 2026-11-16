@@ -16,9 +16,8 @@ use crate::log;
 use crate::snow::Piece;
 
 const CLASS: PCWSTR = w!("SnowdriftWelcome");
-const WIDTH: f32 = 440.0;
-const HEIGHT: f32 = 430.0;
-const TITLE: &str = "IT'S SNOWING\nON YOUR DESKTOP.";
+const WIDTH: f32 = 460.0;
+const HEIGHT: f32 = 460.0;
 /// Spacing of the pieces that fly off.
 const CELL: f32 = 6.0;
 /// Spacing of the crumbling front: fine enough that its edge reads as a line, not as squares.
@@ -95,10 +94,8 @@ fn open() -> Result<()> {
     REGISTER.call_once(|| {
         let _ = card::register(CLASS, Some(procedure));
     });
-    let (scale, _) = card::placement(WIDTH, HEIGHT);
-    let height = Card::new(WIDTH, HEIGHT, scale)?.fitting_height(&[content(false)], HEIGHT)?;
-    let (scale, origin) = card::placement(WIDTH, height);
-    let card = Card::new(WIDTH, height, scale)?;
+    let (scale, origin) = card::placement(WIDTH, HEIGHT);
+    let card = Card::new(WIDTH, HEIGHT, scale)?;
     let (pixels, hits) = card.paint(&content(false))?;
     unsafe {
         let window = CreateWindowExW(
@@ -126,7 +123,9 @@ fn open() -> Result<()> {
 fn content(pressed: bool) -> Content<'static> {
     static BUTTON: OnceLock<String> = OnceLock::new();
     let button = BUTTON.get_or_init(|| tr("welcome.start").to_uppercase());
-    Content { icon: 112.0, title: TITLE, title_size: 34.0, body: tr("welcome.windows"), button, pressed, closable: false }
+    static TITLE: OnceLock<String> = OnceLock::new();
+    let title = TITLE.get_or_init(|| tr("welcome.title").to_uppercase());
+    Content { icon: 76.0, title, title_size: 30.0, body: tr("welcome.windows"), button, pressed, closable: false }
 }
 
 unsafe extern "system" fn procedure(window: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
