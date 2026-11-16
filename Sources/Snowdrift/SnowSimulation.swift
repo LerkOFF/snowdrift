@@ -719,6 +719,8 @@ final class SnowSimulation {
         expireParking()
         for ledge in ledgeList { carry(ledge, dt: dt) }
         trackCursor(point, dt: dt)
+        advancePlow(dt: dt)
+        dockHover(dt: dt)
         for ledge in ledgeList where !ledge.carried { confine(ledge) }
         blow(dt: dt)
         skim(dt: dt)
@@ -755,7 +757,7 @@ final class SnowSimulation {
             pace = .calm
         }
         let changed = wasMoving || !flakes.isEmpty || !grains.isEmpty || !motes.isEmpty || !ghosts.isEmpty || !fallingSigns.isEmpty || !snowballs.isEmpty
-            || !splashes.isEmpty || !glassDrops.isEmpty || wet || heightsChanged || windowsChanged || pumpkinsMoved || restyled || borrowedChanged
+            || !splashes.isEmpty || !glassDrops.isEmpty || wet || heightsChanged || plow != nil || windowsChanged || pumpkinsMoved || restyled || borrowedChanged
         restyled = false
         windowsChanged = false
         borrowedChanged = false
@@ -1707,6 +1709,111 @@ final class SnowSimulation {
         let end = left ? 0 : layer.count - 1
         let x = left ? layer.base.x - 0.75 : layer.base.x + layer.width + 0.75
         return SIMD2(x, layer.surface(end))
+    }
+
+    // MARK: - Snowplow and the Dock (Snowdrift)
+
+    /// The snowplow driving along the bottom of the screen: it scrapes the ground snow, heaps it up ahead of its blade
+    /// and throws what is left over the end of the screen.
+    struct PlowState {
+        var dir: Float          // +1 to the right, -1 to the left
+        var tip: Float          // x of the blade
+        var pushed: Float       // how much it has scraped, for its look
+    }
+
+    private(set) var plow: PlowState?
+    private var plowCheckAt: Double = 0
+    /// The mean height of the ground snow at which the plow comes out by itself.
+    private let plowTrigger: Float = 11
+    private let plowSpeed: Float = 230
+
+    var plowAllowed: Bool { accumulates && groundSettles }
+
+    func startPlow() {
+        guard plow == nil, plowAllowed else { return }
+        let dir: Float = random.next() < 0.5 ? 1 : -1
+        plow = PlowState(dir: dir, tip: dir > 0 ? -40 : width + 40, pushed: 0)
+        lastCursorPush = clock
+        stirred()
+    }
+
+    func callOffPlow() { plow = nil }
+
+    private func advancePlow(dt: Float) {
+        if plow == nil, plowAllowed, clock > plowCheckAt {
+            plowCheckAt = clock + 0.5
+            let heights = ground.heights
+            if !heights.isEmpty, heights.reduce(0, +) / Float(heights.count) >= plowTrigger { startPlow() }
+        }
+        guard var p = plow else { return }
+        lastCursorPush = clock
+        let previous = p.tip
+        p.tip += p.dir * plowSpeed * dt
+        let from = max(0, min(previous, p.tip)), to = min(width, max(previous, p.tip))
+        var scraped = Gathered()
+        if to > from, ground.count > 0 {
+            let lower = max(0, Int((from / columnWidth).rounded(.down)))
+            let upper = min(ground.count - 1, Int((to / columnWidth).rounded(.down)))
+            if lower <= upper {
+                for i in lower...upper {
+                    let h = ground.heights[i]
+                    guard h > 0.001 else { continue }
+                    scraped.add(h * columnWidth, ground.blend(i))
+                    ground.set(i, 0)
+                }
+            }
+        }
+        if scraped.area > 0 {
+            heightsChanged = true
+            p.pushed += scraped.area
+            // The snow rides along ahead of the blade; at the end of the screen it goes over the edge.
+            let ahead = p.tip + p.dir * 9
+            var missed = ground.deposit(scraped.area, at: ahead, wide: true, blend: scraped.blend)
+            if ahead < 0 || ahead > width { missed = max(missed, scraped.area * 0.8) }
+            if missed > 0.05 {
+                let edgeX = min(max(ahead, 0), width)
+                release(missed, at: SIMD2(edgeX, ground.surface(ground.clampedIndex(at: edgeX)) + 2), velocity: SIMD2(p.dir * 190, 110),
+                        spread: SIMD2(1, 8), scatter: 0.6, blend: scraped.blend)
+            }
+        }
+        if (p.dir > 0 && p.tip > width + 220) || (p.dir < 0 && p.tip < -220) { plow = nil } else { plow = p }
+    }
+
+    /// Over the Dock its icons grow under the pointer, and the snow around it flies apart.
+    private func dockHover(dt: Float) {
+        guard accumulates, let c = cursor else { return }
+        let dockLayer = layers.first(where: \.isDock)
+        let dockTop = dockLayer.map { $0.base.y } ?? 0
+        let zone = dockTop > 1 ? dockTop + 14 : 70       // Dock hidden: a strip along the bottom edge
+        guard c.y <= zone else { return }
+        let reach: Float = 95
+        var touched = false
+        for layer in [ground] + (dockLayer.map { [$0] } ?? []) {
+            guard layer.top > 0.3 else { continue }
+            let lower = max(0, Int(((c.x - reach - layer.base.x) / columnWidth).rounded(.down)))
+            let upper = min(layer.count - 1, Int(((c.x + reach - layer.base.x) / columnWidth).rounded(.down)))
+            guard lower <= upper else { continue }
+            for i in lower...upper where layer.visible[i] {
+                let x = layer.centerX(i)
+                let d = x - c.x
+                let weight = 1 - abs(d) / reach
+                let old = layer.heights[i]
+                guard weight > 0, old > 0.3 else { continue }
+                if random.next() > min(1, 14 * dt * weight) { continue }
+                let take = old * random.range(0.5, 1)
+                let blend = layer.blend(i)
+                layer.set(i, old - take)
+                heightsChanged = true
+                touched = true
+                var gathered = Gathered()
+                gathered.add(take * columnWidth, blend)
+                let side: Float = d >= 0 ? 1 : -1
+                releaseHeld(gathered, at: SIMD2(x, layer.surface(i)),
+                            velocity: SIMD2(side * random.range(40, 60 + 170 * weight), random.range(120, 220 + 280 * weight)),
+                            spread: SIMD2(columnWidth, 2), scatter: 0.5, leaves: 0)
+            }
+        }
+        if touched { lastCursorPush = clock }
     }
 
     // MARK: - Cursor

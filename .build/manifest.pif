@@ -5,11 +5,11 @@
       "name" : "Snowdrift",
       "path" : "/Users/lerk/work/xcode/snowdrift",
       "projects" : [
-        "ed76359f725bc72c596881c005f55dba0fe158d4af465e47306e0f7792f538d0",
+        "a81ec81301f080565104fb7d6d9d3fa2daa5e85f9c0d7e67765dc9edeca0841f",
         "1d7b2f61bac52bd8877aa5b7bdcd5bb980723c9c1e6bcfe4e8564f0e2f3a316d"
       ]
     },
-    "signature" : "e1cadb377e79ed42ddf41fa0bba21488e0a7b7314b69adae49700cc8f0ee1b04",
+    "signature" : "51a7388ea0a5727e51d3e65ea8faeb2c213ba1b3f33a3aa14ceeb876dd5589fb",
     "type" : "workspace"
   },
   {
@@ -313,6 +313,14 @@
               {
                 "fileType" : "sourcecode.swift",
                 "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_14",
+                "name" : "PlowOverlay.swift",
+                "path" : "PlowOverlay.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_15",
                 "name" : "PowerMonitor.swift",
                 "path" : "PowerMonitor.swift",
                 "sourceTree" : "<group>",
@@ -320,7 +328,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_15",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_16",
                 "name" : "Preferences.swift",
                 "path" : "Preferences.swift",
                 "sourceTree" : "<group>",
@@ -328,7 +336,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_16",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_17",
                 "name" : "Renderer.swift",
                 "path" : "Renderer.swift",
                 "sourceTree" : "<group>",
@@ -336,7 +344,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_17",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_18",
                 "name" : "SceneLight.swift",
                 "path" : "SceneLight.swift",
                 "sourceTree" : "<group>",
@@ -344,7 +352,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_18",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_19",
                 "name" : "ScreenSnow.swift",
                 "path" : "ScreenSnow.swift",
                 "sourceTree" : "<group>",
@@ -352,7 +360,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_19",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_20",
                 "name" : "ScreenshotWatch.swift",
                 "path" : "ScreenshotWatch.swift",
                 "sourceTree" : "<group>",
@@ -360,7 +368,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_20",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_21",
                 "name" : "Shaders.swift",
                 "path" : "Shaders.swift",
                 "sourceTree" : "<group>",
@@ -368,7 +376,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_21",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_22",
                 "name" : "SnowLayer.swift",
                 "path" : "SnowLayer.swift",
                 "sourceTree" : "<group>",
@@ -376,7 +384,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_22",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_23",
                 "name" : "SnowSimulation.swift",
                 "path" : "SnowSimulation.swift",
                 "sourceTree" : "<group>",
@@ -384,7 +392,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_23",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_24",
                 "name" : "Text.swift",
                 "path" : "Text.swift",
                 "sourceTree" : "<group>",
@@ -392,7 +400,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_24",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_25",
                 "name" : "WelcomeWindow.swift",
                 "path" : "WelcomeWindow.swift",
                 "sourceTree" : "<group>",
@@ -400,7 +408,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_25",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_26",
                 "name" : "WindowTracker.swift",
                 "path" : "WindowTracker.swift",
                 "sourceTree" : "<group>",
@@ -408,7 +416,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_26",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_27",
                 "name" : "main.swift",
                 "path" : "main.swift",
                 "sourceTree" : "<group>",
@@ -538,6 +546,14 @@
               {
                 "fileType" : "sourcecode.swift",
                 "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_14",
+                "name" : "PlowOverlay.swift",
+                "path" : "PlowOverlay.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_15",
                 "name" : "PowerMonitor.swift",
                 "path" : "PowerMonitor.swift",
                 "sourceTree" : "<group>",
@@ -545,7 +561,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_15",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_16",
                 "name" : "Preferences.swift",
                 "path" : "Preferences.swift",
                 "sourceTree" : "<group>",
@@ -553,7 +569,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_16",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_17",
                 "name" : "Renderer.swift",
                 "path" : "Renderer.swift",
                 "sourceTree" : "<group>",
@@ -561,7 +577,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_17",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_18",
                 "name" : "SceneLight.swift",
                 "path" : "SceneLight.swift",
                 "sourceTree" : "<group>",
@@ -569,7 +585,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_18",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_19",
                 "name" : "ScreenSnow.swift",
                 "path" : "ScreenSnow.swift",
                 "sourceTree" : "<group>",
@@ -577,7 +593,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_19",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_20",
                 "name" : "ScreenshotWatch.swift",
                 "path" : "ScreenshotWatch.swift",
                 "sourceTree" : "<group>",
@@ -585,7 +601,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_20",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_21",
                 "name" : "Shaders.swift",
                 "path" : "Shaders.swift",
                 "sourceTree" : "<group>",
@@ -593,7 +609,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_21",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_22",
                 "name" : "SnowLayer.swift",
                 "path" : "SnowLayer.swift",
                 "sourceTree" : "<group>",
@@ -601,7 +617,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_22",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_23",
                 "name" : "SnowSimulation.swift",
                 "path" : "SnowSimulation.swift",
                 "sourceTree" : "<group>",
@@ -609,7 +625,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_23",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_24",
                 "name" : "Text.swift",
                 "path" : "Text.swift",
                 "sourceTree" : "<group>",
@@ -617,7 +633,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_24",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_25",
                 "name" : "WelcomeWindow.swift",
                 "path" : "WelcomeWindow.swift",
                 "sourceTree" : "<group>",
@@ -625,7 +641,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_25",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_26",
                 "name" : "WindowTracker.swift",
                 "path" : "WindowTracker.swift",
                 "sourceTree" : "<group>",
@@ -633,7 +649,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_26",
+                "guid" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_27",
                 "name" : "main.swift",
                 "path" : "main.swift",
                 "sourceTree" : "<group>",
@@ -659,12 +675,12 @@
       "projectIsPackage" : "true",
       "projectName" : "Snowdrift",
       "targets" : [
-        "5baada7a613a9e711001ac9a5ec5a509a61f6e34fb17208288e3f147acb55972",
-        "f8a656efafc1e7cd21d6499fcd1a61911e44631ce46c6ff3d934d0ebdde06b52",
+        "553e0cb8a4fb0375ac7d79e50aae288912056f598be09a61a910410009a0984e",
+        "980e23821eaad7dd81bcc6820024114ea33455a7f2f0c8256202891dcc023746",
         "9553703770b01e7881863986024a942e8d5bd4d59160389df029fb63846e143c"
       ]
     },
-    "signature" : "ed76359f725bc72c596881c005f55dba0fe158d4af465e47306e0f7792f538d0",
+    "signature" : "a81ec81301f080565104fb7d6d9d3fa2daa5e85f9c0d7e67765dc9edeca0841f",
     "type" : "project"
   },
   {
@@ -1026,6 +1042,15 @@
 
               ],
               "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:snowdrift::MAINGROUP::REF_2::REF_27",
+              "guid" : "PACKAGE-PRODUCT:snowdrift_Snowdrift.Snowdrift::BUILDPHASE_0::27",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
             }
           ],
           "guid" : "PACKAGE-PRODUCT:snowdrift_Snowdrift.Snowdrift::BUILDPHASE_0",
@@ -1051,7 +1076,7 @@
       "productTypeIdentifier" : "com.apple.product-type.tool",
       "type" : "standard"
     },
-    "signature" : "5baada7a613a9e711001ac9a5ec5a509a61f6e34fb17208288e3f147acb55972",
+    "signature" : "553e0cb8a4fb0375ac7d79e50aae288912056f598be09a61a910410009a0984e",
     "type" : "target"
   },
   {
@@ -1458,6 +1483,15 @@
 
               ],
               "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:snowdrift::MAINGROUP::REF_3::REF_27",
+              "guid" : "PACKAGE-TARGET:Snowdrift-586C5315F29E8BC9-testable::BUILDPHASE_0::27",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
             }
           ],
           "guid" : "PACKAGE-TARGET:Snowdrift-586C5315F29E8BC9-testable::BUILDPHASE_0",
@@ -1483,7 +1517,7 @@
       "productTypeIdentifier" : "org.swift.product-type.common.object",
       "type" : "standard"
     },
-    "signature" : "f8a656efafc1e7cd21d6499fcd1a61911e44631ce46c6ff3d934d0ebdde06b52",
+    "signature" : "980e23821eaad7dd81bcc6820024114ea33455a7f2f0c8256202891dcc023746",
     "type" : "target"
   },
   {

@@ -66,3 +66,4 @@
 "setup.open" = "Snowdrift öffnen";
 "setup.failed" = "Installation fehlgeschlagen: {error}.";
 "setup.retry" = "Erneut versuchen";
+"plow" = "Schneepflug rufen";

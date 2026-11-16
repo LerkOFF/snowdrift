@@ -66,3 +66,4 @@
 "setup.open" = "Ouvrir Snowdrift";
 "setup.failed" = "Installation impossible : {error}.";
 "setup.retry" = "Réessayer";
+"plow" = "Appeler le chasse-neige";

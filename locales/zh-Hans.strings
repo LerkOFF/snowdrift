@@ -66,3 +66,4 @@
 "setup.open" = "打开 Snowdrift";
 "setup.failed" = "无法安装：{error}。";
 "setup.retry" = "重试";
+"plow" = "呼叫扫雪车";

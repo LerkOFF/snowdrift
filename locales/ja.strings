@@ -66,3 +66,4 @@
 "setup.open" = "Snowdriftを開く";
 "setup.failed" = "インストールできませんでした：{error}。";
 "setup.retry" = "再試行";
+"plow" = "除雪車を呼ぶ";

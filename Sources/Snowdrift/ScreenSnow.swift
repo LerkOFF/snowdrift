@@ -6,6 +6,7 @@ final class ScreenSnow {
     let displayID: CGDirectDisplayID
     let window: OverlayWindow
     let dock: DockOverlay
+    let plowOverlay: PlowOverlay
     let simulation: SnowSimulation
     private let view: MTKView
     private let renderer: Renderer
@@ -121,6 +122,7 @@ final class ScreenSnow {
         window.showsInScreenshots = Preferences.showInScreenshots
         overFullScreen = Preferences.showOverFullScreen
         dock = DockOverlay(screen: screen, device: device)
+        plowOverlay = PlowOverlay(screen: screen)
         dock.window.showsInScreenshots = Preferences.showInScreenshots
         renderer.dockOverlay = dock
         view = Self.makeView(device: device, size: screen.frame.size)
@@ -149,7 +151,10 @@ final class ScreenSnow {
         renderer.borrowedSnow = { [unowned self] in
             surfaces().contains(.windows) ? displays.borrowed(by: self) : []
         }
-        renderer.stepped = { [unowned self] in displays.pass(from: self) }
+        renderer.stepped = { [unowned self] in
+            displays.pass(from: self)
+            plowOverlay.update(simulation.plow, screen: self.screen, like: window)
+        }
         renderer.sceneLight = { [unowned self] now in
             light.update(screen: self.screen, now: now)
             return (light.light, light.shadowTint, light.rim, light.lantern)
@@ -427,6 +432,7 @@ final class ScreenSnow {
         if aside {
             window.orderOut(nil)
             dock.window.orderOut(nil)
+            plowOverlay.close()
         } else {
             window.orderFrontRegardless()
             dock.window.orderFrontRegardless()
@@ -444,6 +450,7 @@ final class ScreenSnow {
         view.delegate = nil
         window.orderOut(nil)
         dock.close()
+        plowOverlay.close()
     }
 
     /// Window bounds come in global coordinates with the origin at the top left of the primary display.

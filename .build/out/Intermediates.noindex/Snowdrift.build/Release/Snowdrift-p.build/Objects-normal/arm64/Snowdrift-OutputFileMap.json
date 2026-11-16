@@ -78,6 +78,11 @@
     "llvm-bc" : "/Users/lerk/work/xcode/snowdrift/.build/out/Intermediates.noindex/Snowdrift.build/Release/Snowdrift-p.build/Objects-normal/arm64/OverlayWindow.bc",
     "object" : "/Users/lerk/work/xcode/snowdrift/.build/out/Intermediates.noindex/Snowdrift.build/Release/Snowdrift-p.build/Objects-normal/arm64/OverlayWindow.o"
   },
+  "/Users/lerk/work/xcode/snowdrift/Sources/Snowdrift/PlowOverlay.swift" : {
+    "index-unit-output-path" : "/Snowdrift.build/Release/Snowdrift-p.build/Objects-normal/arm64/PlowOverlay.o",
+    "llvm-bc" : "/Users/lerk/work/xcode/snowdrift/.build/out/Intermediates.noindex/Snowdrift.build/Release/Snowdrift-p.build/Objects-normal/arm64/PlowOverlay.bc",
+    "object" : "/Users/lerk/work/xcode/snowdrift/.build/out/Intermediates.noindex/Snowdrift.build/Release/Snowdrift-p.build/Objects-normal/arm64/PlowOverlay.o"
+  },
   "/Users/lerk/work/xcode/snowdrift/Sources/Snowdrift/PowerMonitor.swift" : {
     "index-unit-output-path" : "/Snowdrift.build/Release/Snowdrift-p.build/Objects-normal/arm64/PowerMonitor.o",
     "llvm-bc" : "/Users/lerk/work/xcode/snowdrift/.build/out/Intermediates.noindex/Snowdrift.build/Release/Snowdrift-p.build/Objects-normal/arm64/PowerMonitor.bc",

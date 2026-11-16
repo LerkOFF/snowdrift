@@ -66,3 +66,4 @@
 "setup.open" = "Открыть Snowdrift";
 "setup.failed" = "Не удалось установить: {error}.";
 "setup.retry" = "Повторить";
+"plow" = "Вызвать снегоуборщик";

@@ -1,0 +1,4 @@
+Target dependency graph (2 targets)
+Target 'AllExcludingTests' in project 'Aggregate'
+➜ Explicit dependency on target 'Snowdrift-product' in project 'Snowdrift'
+Target 'Snowdrift-product' in project 'Snowdrift' (no dependencies)

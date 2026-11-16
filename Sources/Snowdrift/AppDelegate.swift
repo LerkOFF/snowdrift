@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let surfacePicker = SurfacePicker()
     private var meltItem: NSMenuItem!
     private var clearItem: NSMenuItem!
+    private var plowItem: NSMenuItem!
     private var halloweenItem: NSMenuItem!
     private var mixedItem: NSMenuItem!
     private var modeItems: [(item: NSMenuItem, mode: Mode)] = []
@@ -187,6 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         halloweenItem = add(tr("halloween"), #selector(toggleHalloween), to: modes)
         menu.addItem(withTitle: tr("mode"), action: nil, keyEquivalent: "").submenu = modes
         clearItem = add(tr("clear.snow"), #selector(clearSnow), to: menu)
+        plowItem = add(tr("plow"), #selector(callPlow), to: menu)
         menu.addItem(.separator())
         let settings = NSMenu()
         settings.autoenablesItems = false
@@ -294,6 +296,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleDeepInteraction() {
         Preferences.deepInteraction.toggle()
         Marquee.enabled = Preferences.deepInteraction
+    }
+
+    @objc private func callPlow() {
+        for snow in screens { snow.simulation.startPlow() }
     }
 
     @objc private func clearSnow() {
