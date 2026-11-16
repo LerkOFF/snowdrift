@@ -61,4 +61,4 @@ cargo xwin build --release --target x86_64-pc-windows-msvc --bin Snowdrift
 
 ## Лицензия
 
-Код, добавленный в этом репозитории, под MIT, см. [LICENSE](LICENSE). Движок снегопада основан на [Snowhush](https://github.com/mbezruchko/Snowhush) Михаила Безручко (PolyForm Noncommercial 1.0.0) и используется с разрешения автора, подробности в [NOTICE](NOTICE).
+Код под MIT, см. [LICENSE](LICENSE).
