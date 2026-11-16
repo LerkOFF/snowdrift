@@ -13,7 +13,7 @@ final class WelcomeController: NSObject {
     private var crumble: Crumble?
 
     func show() {
-        let size = CGSize(width: 440, height: 430)
+        let size = CGSize(width: 460, height: 460)
         let window = WelcomeWindow(
             contentRect: CGRect(origin: .zero, size: size),
             styleMask: .borderless,
@@ -233,54 +233,52 @@ private final class Crumble {
 }
 
 /// Drawn rather than built from layer properties, so `cacheDisplay` captures exactly what is on screen.
+/// A round window: a night sky with a drift along its bottom edge and a snowflake in the middle.
 private final class WelcomeView: NSView {
     let button = GetStartedButton()
-    private let background = NSColor(srgbRed: 0.105, green: 0.088, blue: 0.072, alpha: 1)
-    private let ink = NSColor(srgbRed: 0.93, green: 0.9, blue: 0.85, alpha: 1)
-    private let muted = NSColor(srgbRed: 0.78, green: 0.75, blue: 0.7, alpha: 1)
+    private let ink = NSColor(srgbRed: 0.96, green: 0.98, blue: 1, alpha: 1)
+    private let muted = NSColor(srgbRed: 0.72, green: 0.8, blue: 0.9, alpha: 1)
 
     override init(frame: NSRect) {
         super.init(frame: frame)
 
-        // The bundled artwork, not applicationIconImage, which follows the system's tinted or clear icon style.
-        let icon = NSImageView(image: Bundle.main.image(forResource: "AppIcon") ?? NSApp.applicationIconImage)
-        icon.imageScaling = .scaleProportionallyUpOrDown
-        icon.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([icon.widthAnchor.constraint(equalToConstant: 112), icon.heightAnchor.constraint(equalToConstant: 112)])
+        let flake = SnowflakeView()
+        flake.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([flake.widthAnchor.constraint(equalToConstant: 76), flake.heightAnchor.constraint(equalToConstant: 76)])
 
         let title = NSTextField(labelWithAttributedString: NSAttributedString(
-            string: "IT'S SNOWING\nON YOUR DESKTOP.",
+            string: tr("welcome.title"),
             attributes: [
-                .font: NSFont.systemFont(ofSize: 34, weight: .light, width: .condensed),
+                .font: NSFont.systemFont(ofSize: 25, weight: .light),
                 .foregroundColor: ink,
-                .kern: 0.6,
-                .paragraphStyle: Self.paragraph(lineHeight: 0.95),
+                .paragraphStyle: Self.paragraph(lineHeight: 1.0),
             ]
         ))
+        title.preferredMaxLayoutWidth = 280
 
         let body = NSTextField(wrappingLabelWithString: tr("welcome.mac"))
         body.attributedStringValue = NSAttributedString(string: body.stringValue, attributes: [
-            .font: NSFont.systemFont(ofSize: 13.5),
+            .font: NSFont.systemFont(ofSize: 12.5),
             .foregroundColor: muted,
-            .paragraphStyle: Self.paragraph(lineHeight: 1.3),
+            .paragraphStyle: Self.paragraph(lineHeight: 1.28),
         ])
-        body.preferredMaxLayoutWidth = 330
+        body.preferredMaxLayoutWidth = 270
         // Selectable labels swap in a field editor on click, which re-lays the text out without its paragraph style.
         title.isSelectable = false
         body.isSelectable = false
 
-        let stack = NSStackView(views: [icon, title, body, button])
+        let stack = NSStackView(views: [flake, title, body, button])
         stack.orientation = .vertical
         stack.alignment = .centerX
-        stack.spacing = 18
-        stack.setCustomSpacing(10, after: icon)
-        stack.setCustomSpacing(28, after: body)
+        stack.spacing = 12
+        stack.setCustomSpacing(8, after: flake)
+        stack.setCustomSpacing(22, after: body)
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([
             stack.centerXAnchor.constraint(equalTo: centerXAnchor),
-            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
-            stack.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -64),
+            stack.centerYAnchor.constraint(equalTo: centerYAnchor, constant: 12),
+            stack.widthAnchor.constraint(lessThanOrEqualToConstant: 290),
         ])
     }
 
@@ -289,12 +287,60 @@ private final class WelcomeView: NSView {
     override var mouseDownCanMoveWindow: Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
-        let shape = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 18, yRadius: 18)
-        background.setFill()
-        shape.fill()
-        NSColor(white: 1, alpha: 0.08).setStroke()
-        shape.lineWidth = 1
-        shape.stroke()
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+        let disc = bounds.insetBy(dx: 1, dy: 1)
+        let circle = CGPath(ellipseIn: disc, transform: nil)
+        ctx.saveGState()
+        ctx.addPath(circle)
+        ctx.clip()
+
+        // night sky, lighter towards the top
+        let space = CGColorSpaceCreateDeviceRGB()
+        let sky = CGGradient(colorsSpace: space, colors: [
+            CGColor(red: 0.04, green: 0.08, blue: 0.17, alpha: 1),
+            CGColor(red: 0.10, green: 0.20, blue: 0.38, alpha: 1),
+        ] as CFArray, locations: [0, 1])!
+        ctx.drawLinearGradient(sky, start: CGPoint(x: 0, y: disc.minY), end: CGPoint(x: 0, y: disc.maxY), options: [])
+
+        // a few still flakes, the same every time
+        var seed: UInt32 = 7
+        func next() -> CGFloat { seed = seed &* 1_664_525 &+ 1_013_904_223; return CGFloat(seed >> 8) / CGFloat(1 << 24) }
+        for _ in 0..<34 {
+            let x = disc.minX + next() * disc.width, y = disc.minY + disc.height * (0.28 + 0.72 * next())
+            let r = 0.8 + next() * 2.2
+            // none over the text
+            if abs(x - disc.midX) < 150 && y > disc.minY + 70 && y < disc.maxY - 50 { _ = next(); continue }
+            ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.25 + 0.5 * next()))
+            ctx.fillEllipse(in: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
+        }
+
+        // the drift along the bottom: two soft ridges
+        ctx.setFillColor(CGColor(red: 0.78, green: 0.86, blue: 0.96, alpha: 1))
+        let back = CGMutablePath()
+        back.move(to: CGPoint(x: disc.minX, y: disc.minY))
+        back.addLine(to: CGPoint(x: disc.minX, y: disc.minY + 52))
+        back.addCurve(to: CGPoint(x: disc.midX + 10, y: disc.minY + 44), control1: CGPoint(x: disc.minX + 120, y: disc.minY + 86), control2: CGPoint(x: disc.midX - 90, y: disc.minY + 26))
+        back.addCurve(to: CGPoint(x: disc.maxX, y: disc.minY + 58), control1: CGPoint(x: disc.midX + 110, y: disc.minY + 62), control2: CGPoint(x: disc.maxX - 70, y: disc.minY + 78))
+        back.addLine(to: CGPoint(x: disc.maxX, y: disc.minY))
+        back.closeSubpath()
+        ctx.addPath(back)
+        ctx.fillPath()
+        ctx.setFillColor(CGColor(red: 0.96, green: 0.98, blue: 1, alpha: 1))
+        let front = CGMutablePath()
+        front.move(to: CGPoint(x: disc.minX, y: disc.minY))
+        front.addLine(to: CGPoint(x: disc.minX, y: disc.minY + 30))
+        front.addCurve(to: CGPoint(x: disc.midX - 20, y: disc.minY + 26), control1: CGPoint(x: disc.minX + 80, y: disc.minY + 50), control2: CGPoint(x: disc.midX - 110, y: disc.minY + 12))
+        front.addCurve(to: CGPoint(x: disc.maxX, y: disc.minY + 36), control1: CGPoint(x: disc.midX + 60, y: disc.minY + 42), control2: CGPoint(x: disc.maxX - 90, y: disc.minY + 52))
+        front.addLine(to: CGPoint(x: disc.maxX, y: disc.minY))
+        front.closeSubpath()
+        ctx.addPath(front)
+        ctx.fillPath()
+        ctx.restoreGState()
+
+        ctx.addPath(circle)
+        ctx.setStrokeColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.18))
+        ctx.setLineWidth(1.5)
+        ctx.strokePath()
     }
 
     private static func paragraph(lineHeight: CGFloat) -> NSParagraphStyle {
@@ -305,9 +351,39 @@ private final class WelcomeView: NSView {
     }
 }
 
+/// A six-armed snowflake with branches, drawn in code.
+private final class SnowflakeView: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+        let c = CGPoint(x: bounds.midX, y: bounds.midY)
+        let R = min(bounds.width, bounds.height) / 2 - 3
+        ctx.setLineCap(.round)
+        for (width, color) in [(CGFloat(6.2), CGColor(red: 0.05, green: 0.12, blue: 0.26, alpha: 0.55)),
+                               (CGFloat(2.6), CGColor(red: 0.86, green: 0.95, blue: 1, alpha: 1))] {
+            ctx.setLineWidth(width)
+            ctx.setStrokeColor(color)
+            for k in 0..<6 {
+                ctx.saveGState()
+                ctx.translateBy(x: c.x, y: c.y)
+                ctx.rotate(by: CGFloat(k) * .pi / 3)
+                ctx.move(to: .zero)
+                ctx.addLine(to: CGPoint(x: 0, y: R))
+                for (at, len) in [(0.45, 0.28), (0.72, 0.2)] {
+                    ctx.move(to: CGPoint(x: 0, y: R * at))
+                    ctx.addLine(to: CGPoint(x: -R * len, y: R * (at + len)))
+                    ctx.move(to: CGPoint(x: 0, y: R * at))
+                    ctx.addLine(to: CGPoint(x: R * len, y: R * (at + len)))
+                }
+                ctx.strokePath()
+                ctx.restoreGState()
+            }
+        }
+    }
+}
+
 private final class GetStartedButton: NSButton {
-    private let fill = NSColor(srgbRed: 0.93, green: 0.9, blue: 0.85, alpha: 1)
-    private let label = NSColor(srgbRed: 0.09, green: 0.075, blue: 0.06, alpha: 1)
+    private let fill = NSColor(srgbRed: 0.96, green: 0.98, blue: 1, alpha: 1)
+    private let label = NSColor(srgbRed: 0.06, green: 0.13, blue: 0.27, alpha: 1)
 
     init() {
         super.init(frame: .zero)
@@ -316,20 +392,19 @@ private final class GetStartedButton: NSButton {
         keyEquivalent = "\r"
         focusRingType = .none
         translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([widthAnchor.constraint(equalToConstant: 190), heightAnchor.constraint(equalToConstant: 44)])
+        NSLayoutConstraint.activate([widthAnchor.constraint(equalToConstant: 168), heightAnchor.constraint(equalToConstant: 40)])
         setAccessibilityLabel(tr("welcome.start"))
     }
 
     required init?(coder: NSCoder) { nil }
 
     override func draw(_ dirtyRect: NSRect) {
-        let shape = NSBezierPath(roundedRect: bounds, xRadius: 2, yRadius: 2)
-        (isHighlighted ? fill.blended(withFraction: 0.12, of: .black) ?? fill : fill).setFill()
+        let shape = NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2, yRadius: bounds.height / 2)
+        (isHighlighted ? fill.blended(withFraction: 0.14, of: .black) ?? fill : fill).setFill()
         shape.fill()
-        let text = NSAttributedString(string: tr("welcome.start").localizedUppercase, attributes: [
-            .font: NSFont.systemFont(ofSize: 12.5, weight: .semibold),
+        let text = NSAttributedString(string: tr("welcome.start"), attributes: [
+            .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
             .foregroundColor: label,
-            .kern: 1.8,
         ])
         let size = text.size()
         text.draw(at: CGPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))

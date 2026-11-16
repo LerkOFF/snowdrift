@@ -58,10 +58,10 @@ pub fn install(app: &[u8], version: &str) -> Result<PathBuf, String> {
     let quoted = format!("\"{}\"", exe.display());
     write_string(UNINSTALL, w!("DisplayName"), "Snowdrift");
     write_string(UNINSTALL, w!("DisplayVersion"), version);
-    write_string(UNINSTALL, w!("Publisher"), "Mykhailo Bezruchko");
+    write_string(UNINSTALL, w!("Publisher"), "LerkOFF");
     write_string(UNINSTALL, w!("DisplayIcon"), &exe.display().to_string());
     write_string(UNINSTALL, w!("InstallLocation"), &folder.display().to_string());
-    write_string(UNINSTALL, w!("URLInfoAbout"), "https://snowdrift.app");
+    write_string(UNINSTALL, w!("URLInfoAbout"), "https://github.com/LerkOFF/snowdrift");
     write_string(UNINSTALL, w!("UninstallString"), &format!("{quoted} --uninstall"));
     write_string(UNINSTALL, w!("QuietUninstallString"), &format!("{quoted} --uninstall --silent"));
     write_number(UNINSTALL, w!("NoModify"), 1);

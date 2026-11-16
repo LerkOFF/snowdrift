@@ -1,22 +1,13 @@
 [package]
 name = "snowdrift"
-version = "0.13.2"
+version = "0.2.0"
 edition = "2024"
 publish = false
 autobins = false
 
-[features]
-# Builds Snowdrift-Setup.exe, which carries the app built first: see build.sh.
-setup = []
-
 [[bin]]
 name = "Snowdrift"
 path = "src/main.rs"
-
-[[bin]]
-name = "Snowdrift-Setup"
-path = "src/bin/setup.rs"
-required-features = ["setup"]
 
 [dependencies]
 snowdrift-core = { path = "../core" }

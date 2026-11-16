@@ -71,11 +71,11 @@ fn version_info(version: &str, description: &str, filename: &str) -> Vec<u8> {
         fixed.extend((value as u32).to_le_bytes());
     }
     let strings = [
-        ("CompanyName", "Mykhailo Bezruchko"),
+        ("CompanyName", "LerkOFF"),
         ("FileDescription", description),
         ("FileVersion", version),
         ("InternalName", "Snowdrift"),
-        ("LegalCopyright", "© 2026 Mykhailo Bezruchko"),
+        ("LegalCopyright", "© 2026 LerkOFF. Based on Snowhush by Mykhailo Bezruchko"),
         ("OriginalFilename", filename),
         ("ProductName", "Snowdrift"),
         ("ProductVersion", version),

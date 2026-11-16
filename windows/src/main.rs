@@ -26,6 +26,11 @@ fn main() {
         snowdrift::install::uninstall();
         return;
     }
+    // What the one-line installer runs: copies this exe into the user's programs folder, registers it and starts it.
+    if std::env::args().skip(1).any(|argument| argument == "--install") {
+        install_self();
+        return;
+    }
     unsafe {
         let _instance = CreateMutexW(None, true, w!("Local\\Snowdrift"));
         if GetLastError() == ERROR_ALREADY_EXISTS {
@@ -39,5 +44,17 @@ fn main() {
     log!("Snowdrift {}", env!("CARGO_PKG_VERSION"));
     if let Err(error) = app::run() {
         log!("failed: {error}");
+    }
+}
+
+fn install_self() {
+    snowdrift::install::close_running();
+    let result = std::env::current_exe()
+        .map_err(|error| error.to_string())
+        .and_then(|exe| std::fs::read(exe).map_err(|error| error.to_string()))
+        .and_then(|bytes| snowdrift::install::install(&bytes, env!("CARGO_PKG_VERSION")));
+    match result {
+        Ok(exe) => snowdrift::install::launch(&exe),
+        Err(error) => eprintln!("{error}"),
     }
 }

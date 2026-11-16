@@ -42,6 +42,7 @@
 
 "welcome.mac" = "O Snowdrift fica na barra de menus. Clique no floco de neve para mudar a nevada, deixar a neve acumulada derreter ou mantê-la atrás das janelas. Afaste-a com o cursor.";
 "welcome.windows" = "O Snowdrift fica na bandeja do sistema. Clique no ícone para mudar a nevada, deixar a neve acumulada derreter ou mantê-la longe das janelas. Afaste-a com o cursor.";
+"welcome.title" = "Neve na sua área de trabalho";
 "welcome.start" = "Começar";
 
 "update.ask" = "O Snowdrift {version} está disponível. Você tem a {current}.\n\nBaixar agora?";

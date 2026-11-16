@@ -42,6 +42,7 @@
 
 "welcome.mac" = "Snowdrift 住在菜单栏里。点按雪花即可改变降雪、让积雪融化，或把雪留在窗口后面。用指针把它拨开吧。";
 "welcome.windows" = "Snowdrift 住在系统托盘里。点击它的图标即可改变降雪、让积雪融化，或不让雪落在窗口上。用光标把它拨开吧。";
+"welcome.title" = "桌面上下起了雪";
 "welcome.start" = "开始";
 
 "update.ask" = "Snowdrift {version} 现已推出。你当前的版本是 {current}。\n\n现在下载吗？";

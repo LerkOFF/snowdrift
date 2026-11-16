@@ -42,6 +42,7 @@
 
 "welcome.mac" = "Snowdrift vit dans la barre des menus. Cliquez sur le flocon pour changer la chute de neige, laisser fondre les congères ou garder la neige derrière vos fenêtres. Balayez-la avec le curseur.";
 "welcome.windows" = "Snowdrift vit dans la zone de notification. Cliquez sur son icône pour changer la chute de neige, laisser fondre les congères ou garder la neige hors de vos fenêtres. Balayez-la avec le curseur.";
+"welcome.title" = "De la neige sur ton bureau";
 "welcome.start" = "Commencer";
 
 "update.ask" = "Snowdrift {version} est disponible. Vous avez la version {current}.\n\nLa télécharger maintenant ?";

@@ -11,10 +11,10 @@ use windows::core::{PCWSTR, w};
 
 use snowdrift_core::version::{field, newer};
 
-const REPOSITORY: &str = "mbezruchko/Snowdrift";
-const INSTALLER: &str = "Snowdrift-Setup.exe";
-/// Where updates come from: Windows blocks the unsigned installer, while the Store signs its package.
-pub const STORE: &str = "https://apps.microsoft.com/detail/9P00NQMGBKGP";
+const REPOSITORY: &str = "LerkOFF/snowdrift";
+const INSTALLER: &str = "Snowdrift.exe";
+/// Where updates come from: the latest release page.
+pub const STORE: &str = "https://github.com/LerkOFF/snowdrift/releases/latest";
 
 /// A release newer than this build that carries an installer for Windows.
 pub struct Release {

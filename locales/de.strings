@@ -42,6 +42,7 @@
 
 "welcome.mac" = "Snowdrift wohnt in der Menüleiste. Klicke auf die Schneeflocke, um den Schneefall zu ändern, Schneewehen schmelzen zu lassen oder den Schnee hinter deinen Fenstern zu halten. Wisch ihn mit dem Mauszeiger beiseite.";
 "welcome.windows" = "Snowdrift wohnt im Infobereich der Taskleiste. Klicke auf das Symbol, um den Schneefall zu ändern, Schneewehen schmelzen zu lassen oder den Schnee von deinen Fenstern fernzuhalten. Wisch ihn mit dem Mauszeiger beiseite.";
+"welcome.title" = "Schnee auf deinem Desktop";
 "welcome.start" = "Los geht's";
 
 "update.ask" = "Snowdrift {version} ist verfügbar. Du hast {current}.\n\nJetzt herunterladen?";

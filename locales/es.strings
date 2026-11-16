@@ -42,6 +42,7 @@
 
 "welcome.mac" = "Snowdrift vive en la barra de menús. Haz clic en el copo para cambiar la nevada, dejar que la nieve acumulada se derrita o mantenerla detrás de tus ventanas. Apártala con el cursor.";
 "welcome.windows" = "Snowdrift vive en la bandeja del sistema. Haz clic en su icono para cambiar la nevada, dejar que la nieve acumulada se derrita o mantenerla fuera de tus ventanas. Apártala con el cursor.";
+"welcome.title" = "Nieve en tu escritorio";
 "welcome.start" = "Empezar";
 
 "update.ask" = "Snowdrift {version} está disponible. Tienes la {current}.\n\n¿Descargarla ahora?";
