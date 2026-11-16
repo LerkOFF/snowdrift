@@ -416,6 +416,23 @@ struct Air {
     jolt_scale: f32,
 }
 
+/// The snowplow: it scrapes the ground snow, heaps it up ahead of its blade and throws what is left over the end of the screen.
+#[derive(Clone, Copy, Debug)]
+pub struct PlowState {
+    /// +1 to the right, -1 to the left.
+    pub dir: f32,
+    /// x of the blade.
+    pub tip: f32,
+    /// How much snow it carries ahead of the blade, for the size of the heap in front of it.
+    pub pushed: f32,
+    /// Whether it has tipped its load over the end of the screen.
+    pub dumped: bool,
+}
+
+/// The mean height of the ground snow at which the plow comes out by itself.
+const PLOW_TRIGGER: f32 = 11.0;
+const PLOW_SPEED: f32 = 230.0;
+
 pub struct SnowSimulation {
     width: f32,
     height: f32,
@@ -472,6 +489,11 @@ pub struct SnowSimulation {
     switched_at: f64,
     restyled: bool,
     air: Air,
+    /// The snowplow driving along the ground, if one is out.
+    plow: Option<PlowState>,
+    plow_check_at: f64,
+    /// Whether the plow comes out by itself once the ground snow gets deep; the app turns it on.
+    pub auto_plow: bool,
 }
 
 impl SnowSimulation {
@@ -514,6 +536,9 @@ impl SnowSimulation {
             rain: Rain::default(),
             switched_at: 0.0,
             restyled: false,
+            plow: None,
+            plow_check_at: 0.0,
+            auto_plow: false,
             air: Air {
                 flakes: Vec::new(),
                 grains: Vec::new(),
@@ -790,6 +815,8 @@ impl SnowSimulation {
             self.air.carry(ledge, dt);
         }
         self.track_cursor(cursor, dt);
+        self.advance_plow(dt);
+        self.pointer_low(dt);
         for (li, ledge) in self.layers.iter_mut().enumerate().skip(1) {
             self.air.confine(ledge, li, self.width, self.walls);
         }
@@ -844,6 +871,7 @@ impl SnowSimulation {
             || self.moving()
             || self.haunting.moving()
             || self.air.heights_changed
+            || self.plow.is_some()
             || self.air.windows_changed
             || self.lanterns.moved
             || self.restyled
@@ -1206,6 +1234,147 @@ impl SnowSimulation {
     }
 
     // Cursor
+
+    // Snowplow and the pointer over the taskbar (Snowdrift)
+
+    pub fn plow(&self) -> Option<PlowState> {
+        self.plow
+    }
+
+    pub fn plow_allowed(&self) -> bool {
+        self.accumulates && self.ground_settles
+    }
+
+    pub fn start_plow(&mut self) {
+        if self.plow.is_some() || !self.plow_allowed() {
+            return;
+        }
+        let dir = if self.air.random.next() < 0.5 { 1.0 } else { -1.0 };
+        let tip = if dir > 0.0 { -40.0 } else { self.width + 40.0 };
+        self.plow = Some(PlowState { dir, tip, pushed: 0.0, dumped: false });
+        self.air.last_cursor_push = self.air.clock;
+    }
+
+    fn advance_plow(&mut self, dt: f32) {
+        if self.auto_plow && self.plow.is_none() && self.plow_allowed() && self.air.clock > self.plow_check_at {
+            self.plow_check_at = self.air.clock + 0.5;
+            let heights = &self.layers[0].heights;
+            if !heights.is_empty() && heights.iter().sum::<f32>() / heights.len() as f32 >= PLOW_TRIGGER {
+                self.start_plow();
+            }
+        }
+        let Some(mut p) = self.plow else { return };
+        self.air.last_cursor_push = self.air.clock;
+        let previous = p.tip;
+        p.tip += p.dir * PLOW_SPEED * dt;
+        let from = previous.min(p.tip).max(0.0);
+        let to = previous.max(p.tip).min(self.width);
+        let mut scraped = Gathered::default();
+        let count = self.layers[0].count();
+        if to > from && count > 0 {
+            let lower = (from / COLUMN_WIDTH).floor().max(0.0) as usize;
+            let upper = ((to / COLUMN_WIDTH).floor() as usize).min(count - 1);
+            for i in lower..=upper.max(lower) {
+                if i >= count {
+                    break;
+                }
+                let h = self.layers[0].heights[i];
+                if h <= 0.001 {
+                    continue;
+                }
+                let blend = self.layers[0].blend(i);
+                scraped.add(h * COLUMN_WIDTH, blend);
+                self.layers[0].set(i, 0.0);
+            }
+        }
+        if scraped.area > 0.0 {
+            self.air.heights_changed = true;
+            p.pushed += scraped.area;
+            // A little of it flies up off the blade as it goes.
+            let index = self.layers[0].clamped_index(p.tip);
+            let y = self.layers[0].surface(index) + 6.0;
+            self.air.release(scraped.area * 0.03, scraped.blend(), 0.0, V2::new(p.tip + p.dir * 6.0, y), V2::new(p.dir * 110.0, 170.0), V2::new(4.0, 8.0), 0.6);
+        }
+        let at_edge = if p.dir > 0.0 { p.tip >= self.width } else { p.tip <= 0.0 };
+        if at_edge && !p.dumped {
+            // The heap tips over the end of the screen and is gone.
+            let edge_x = if p.dir > 0.0 { self.width + 12.0 } else { -12.0 };
+            for _ in 0..24 {
+                let y = self.air.random.range(4.0, 40.0);
+                let vx = p.dir * self.air.random.range(220.0, 420.0);
+                let vy = self.air.random.range(40.0, 220.0);
+                self.air.release(p.pushed / 24.0, Blend::SNOW, 0.0, V2::new(edge_x, y), V2::new(vx, vy), V2::new(2.0, 6.0), 0.6);
+            }
+            p.dumped = true;
+            p.pushed = 0.0;
+        }
+        let gone = (p.dir > 0.0 && p.tip > self.width + 220.0) || (p.dir < 0.0 && p.tip < -220.0);
+        self.plow = if gone { None } else { Some(p) };
+    }
+
+    /// The pointer low on the screen, over the taskbar or Dock: the icons grow under it, and the snow around it flies apart.
+    fn pointer_low(&mut self, dt: f32) {
+        if !self.accumulates {
+            return;
+        }
+        let Some(c) = self.air.cursor else { return };
+        if c.y > 30.0 {
+            return;
+        }
+        const REACH: f32 = 95.0;
+        let mut touched = false;
+        for li in 0..self.layers.len() {
+            if li != 0 && self.shelf.is_none() {
+                break;
+            }
+            if li != 0 && self.ids.get(li).copied() != self.shelf {
+                continue;
+            }
+            if self.layers[li].top <= 0.3 {
+                continue;
+            }
+            let base = self.layers[li].base();
+            let lower = (((c.x - REACH - base.x) / COLUMN_WIDTH).floor().max(0.0)) as usize;
+            let upper = ((((c.x + REACH - base.x) / COLUMN_WIDTH).floor()).max(0.0) as usize).min(self.layers[li].count().saturating_sub(1));
+            if lower > upper {
+                continue;
+            }
+            for i in lower..=upper {
+                if !self.layers[li].visible[i] {
+                    continue;
+                }
+                let x = self.layers[li].center_x(i);
+                let d = x - c.x;
+                let weight = 1.0 - d.abs() / REACH;
+                let old = self.layers[li].heights[i];
+                if weight <= 0.0 || old <= 0.3 {
+                    continue;
+                }
+                if self.air.random.next() > (14.0 * dt * weight).min(1.0) {
+                    continue;
+                }
+                let take = old * self.air.random.range(0.5, 1.0);
+                let blend = self.layers[li].blend(i);
+                self.layers[li].set(i, old - take);
+                self.air.heights_changed = true;
+                touched = true;
+                let side = if d >= 0.0 { 1.0 } else { -1.0 };
+                let vx = side * self.air.random.range(40.0, 60.0 + 170.0 * weight);
+                let vy = self.air.random.range(120.0, 220.0 + 280.0 * weight);
+                let position = V2::new(x, self.layers[li].surface(i));
+                let area = take * COLUMN_WIDTH;
+                let leaves = area * blend.leaves;
+                let snow = area - leaves;
+                let velocity = V2::new(vx, vy);
+                let spread = V2::new(COLUMN_WIDTH, 2.0);
+                self.air.release(leaves, blend.leaf_only(), 0.0, position, velocity, spread, 0.5);
+                self.air.release(snow, Blend::SNOW, 0.0, position, velocity, spread, 0.5);
+            }
+        }
+        if touched {
+            self.air.last_cursor_push = self.air.clock;
+        }
+    }
 
     fn track_cursor(&mut self, point: V2, dt: f32) {
         for li in self.air.held_layers.drain(..) {

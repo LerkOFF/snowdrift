@@ -24,7 +24,7 @@ final class PlowOverlay {
             }
             return
         }
-        view.p = PlowView.Snapshot(dir: CGFloat(plow.dir), tip: CGFloat(plow.tip), pushed: CGFloat(plow.pushed))
+        view.p = PlowView.Snapshot(dir: CGFloat(plow.dir), tip: CGFloat(plow.tip), pushed: CGFloat(plow.pushed), dumped: plow.dumped)
         window.setFrameOrigin(CGPoint(x: screen.frame.minX + CGFloat(plow.tip) - view.originX, y: screen.frame.minY))
         window.level = main.level
         window.alphaValue = main.alphaValue
@@ -47,9 +47,10 @@ private final class PlowView: NSView {
         var dir: CGFloat
         var tip: CGFloat
         var pushed: CGFloat
+        var dumped: Bool
     }
 
-    var p = Snapshot(dir: 1, tip: 0, pushed: 0)
+    var p = Snapshot(dir: 1, tip: 0, pushed: 0, dumped: false)
     /// Where the blade is inside the window.
     let originX: CGFloat = 210
 
@@ -61,6 +62,23 @@ private final class PlowView: NSView {
     }
 
     func draw(_ ctx: CGContext) {
+        // the heap of snow in front of the blade
+        let moundH = 12 + 58 * (1 - exp(-p.pushed / 15000))
+        let moundW = 50 + moundH * 0.8
+        if !p.dumped && p.pushed > 0 {
+            let f = p.dir
+            let endX = originX + f * moundW
+            let endH = min(moundH, 24)
+            ctx.beginPath()
+            ctx.move(to: CGPoint(x: originX, y: 0))
+            ctx.addLine(to: CGPoint(x: originX, y: moundH))
+            ctx.addCurve(to: CGPoint(x: endX, y: endH), control1: CGPoint(x: originX + f * moundW * 0.35, y: moundH * 1.02),
+                         control2: CGPoint(x: originX + f * moundW * 0.7, y: moundH * 0.5))
+            ctx.addLine(to: CGPoint(x: endX, y: 0))
+            ctx.closePath()
+            ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.97))
+            ctx.fillPath()
+        }
         ctx.saveGState()
         ctx.translateBy(x: originX, y: 0)
         if p.dir < 0 { ctx.scaleBy(x: -1, y: 1) }

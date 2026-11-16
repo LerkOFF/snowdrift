@@ -1718,7 +1718,8 @@ final class SnowSimulation {
     struct PlowState {
         var dir: Float          // +1 to the right, -1 to the left
         var tip: Float          // x of the blade
-        var pushed: Float       // how much it has scraped, for its look
+        var pushed: Float       // how much snow it carries ahead of the blade, for the size of the heap
+        var dumped: Bool        // it has tipped its load over the end of the screen
     }
 
     private(set) var plow: PlowState?
@@ -1732,7 +1733,7 @@ final class SnowSimulation {
     func startPlow() {
         guard plow == nil, plowAllowed else { return }
         let dir: Float = random.next() < 0.5 ? 1 : -1
-        plow = PlowState(dir: dir, tip: dir > 0 ? -40 : width + 40, pushed: 0)
+        plow = PlowState(dir: dir, tip: dir > 0 ? -40 : width + 40, pushed: 0, dumped: false)
         lastCursorPush = clock
         stirred()
     }
@@ -1766,15 +1767,20 @@ final class SnowSimulation {
         if scraped.area > 0 {
             heightsChanged = true
             p.pushed += scraped.area
-            // The snow rides along ahead of the blade; at the end of the screen it goes over the edge.
-            let ahead = p.tip + p.dir * 9
-            var missed = ground.deposit(scraped.area, at: ahead, wide: true, blend: scraped.blend)
-            if ahead < 0 || ahead > width { missed = max(missed, scraped.area * 0.8) }
-            if missed > 0.05 {
-                let edgeX = min(max(ahead, 0), width)
-                release(missed, at: SIMD2(edgeX, ground.surface(ground.clampedIndex(at: edgeX)) + 2), velocity: SIMD2(p.dir * 190, 110),
-                        spread: SIMD2(1, 8), scatter: 0.6, blend: scraped.blend)
+            // A little of it flies up off the blade as it goes.
+            let y = ground.surface(ground.clampedIndex(at: p.tip)) + 6
+            release(scraped.area * 0.03, at: SIMD2(p.tip + p.dir * 6, y), velocity: SIMD2(p.dir * 110, 170), spread: SIMD2(4, 8), scatter: 0.6, blend: scraped.blend)
+        }
+        let atEdge = p.dir > 0 ? p.tip >= width : p.tip <= 0
+        if atEdge && !p.dumped {
+            // The heap tips over the end of the screen and is gone.
+            let edgeX: Float = p.dir > 0 ? width + 12 : -12
+            for _ in 0..<24 {
+                release(p.pushed / 24, at: SIMD2(edgeX, random.range(4, 40)), velocity: SIMD2(p.dir * random.range(220, 420), random.range(40, 220)),
+                        spread: SIMD2(2, 6), scatter: 0.6)
             }
+            p.dumped = true
+            p.pushed = 0
         }
         if (p.dir > 0 && p.tip > width + 220) || (p.dir < 0 && p.tip < -220) { plow = nil } else { plow = p }
     }

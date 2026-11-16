@@ -1464,3 +1464,57 @@ fn toggles_mixed() {
     picked.toggle_mixed();
     assert_eq!(picked.mix, [Mode::Autumn, Mode::Snow]);
 }
+
+#[test]
+fn the_plow_scrapes_the_ground_and_leaves() {
+    let mut simulation = SnowSimulation::new(1280.0, 800.0, 0.75);
+    simulation.thaws = false;
+    run(&mut simulation, 120.0, AWAY);
+    simulation.set_intensity(0.0);
+    run(&mut simulation, 15.0, AWAY);
+    let before = piles(&simulation)[0].1;
+    assert!(before > 1000.0, "ground area {before}");
+    assert!(simulation.plow().is_none());
+
+    simulation.start_plow();
+    let plow = simulation.plow().expect("the plow starts");
+    assert!(plow.dir == 1.0 || plow.dir == -1.0);
+    run(&mut simulation, 8.0, AWAY);
+    assert!(simulation.plow().is_none(), "the plow drives off the far side");
+    run(&mut simulation, 10.0, AWAY);
+    let after = piles(&simulation)[0].1;
+    assert!(after < before * 0.25, "before {before}, after {after}");
+    assert_finite(&simulation);
+}
+
+#[test]
+fn the_plow_comes_out_by_itself_once_the_ground_is_deep() {
+    let mut simulation = SnowSimulation::new(1280.0, 800.0, 1.0);
+    simulation.thaws = false;
+    simulation.auto_plow = true;
+    let mut came = false;
+    for _ in 0..(1500.0 / DT) as usize {
+        simulation.step(DT, AWAY);
+        if simulation.plow().is_some() {
+            came = true;
+            break;
+        }
+    }
+    assert!(came, "no plow in 25 minutes of snow");
+}
+
+#[test]
+fn the_pointer_low_on_the_screen_throws_the_snow_apart() {
+    let mut simulation = SnowSimulation::new(1280.0, 800.0, 0.75);
+    simulation.thaws = false;
+    run(&mut simulation, 120.0, AWAY);
+    simulation.set_intensity(0.0);
+    run(&mut simulation, 15.0, AWAY);
+    let mut flying = 0;
+    for _ in 0..180 {
+        simulation.step(DT, V2::new(640.0, 5.0));
+        flying = flying.max(simulation.sprite_count());
+    }
+    assert!(flying > 40, "nothing thrown: {flying}");
+    assert_finite(&simulation);
+}
