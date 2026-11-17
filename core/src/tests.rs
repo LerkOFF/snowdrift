@@ -265,12 +265,16 @@ fn snow_on_a_window_that_went_behind_another_is_gone_when_it_returns() {
     // Another window comes in front of its whole top edge, and stays there.
     let front = Rect { x: 0.0, y: 0.0, width: 1280.0, height: 480.0 };
     let covered = WindowSurface { blockers: vec![front], cover: vec![front], ..back.clone() };
+    let in_the_air = simulation.sprite_count();
     simulation.update_windows(&[covered], 0.2, &none, &none, false);
-    run(&mut simulation, 3.0, AWAY);
+    run(&mut simulation, 0.6, AWAY);
+    assert!(simulation.sprite_count() > in_the_air, "the snow didn't fall off the window that went behind");
+    run(&mut simulation, 2.4, AWAY);
     // It comes back to the front.
     simulation.update_windows(&[back.clone()], 0.2, &none, &none, false);
     simulation.step(DT, AWAY);
-    assert_eq!(snow_on(&simulation), 0.0, "the snow came back with the window");
+    let back_again = snow_on(&simulation);
+    assert!(back_again < 0.05, "the snow came back with the window: {back_again}");
 }
 
 #[test]

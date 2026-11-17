@@ -773,7 +773,7 @@ impl SnowSimulation {
         self.resize(width, height);
         // As off a window closing: the leaves lying on top fall as themselves, the heap under them unseen.
         self.drop_leaves(0, V2::new(0.0, by));
-        self.air.shed(&mut fallen, 1.0, V2::ZERO, false);
+        self.air.shed(&mut fallen, 1.0, V2::ZERO, false, None);
     }
 
     /// The ground rises `by` points as the snow stops short of where it reached, as when the taskbar comes back over the
@@ -801,14 +801,18 @@ impl SnowSimulation {
     }
 
     /// Returns whether anything visible changed.
-    /// Snow on a window that has gone behind another stays hidden only for a moment: then it is gone, and the window
-    /// comes back bare.
+    /// Snow on a window that has gone behind another falls off it after a moment, as off a window that closed, and the
+    /// window comes back bare.
     fn forget_buried_snow(&mut self, dt: f32) {
-        let mut lost = false;
-        for ledge in &mut self.layers[1..] {
-            lost |= ledge.forget_buried(dt);
+        let mut shed_any = false;
+        for li in 1..self.layers.len() {
+            let Some(columns) = self.layers[li].buried_snow(dt) else { continue };
+            let ledge = &mut self.layers[li];
+            let velocity = ledge.track_velocity + ledge.offset_velocity;
+            self.air.shed(ledge, 1.0, velocity, false, Some(&columns));
+            shed_any = true;
         }
-        if lost {
+        if shed_any {
             let (layers, ids) = (&self.layers, &self.ids);
             self.lying.retain(|leaf| {
                 let Some(li) = ids.iter().position(|&id| id == leaf.layer) else { return true };
@@ -1196,7 +1200,7 @@ impl SnowSimulation {
             } else if !parked.contains(&id) {
                 let velocity = ledge.track_velocity + ledge.offset_velocity;
                 self.drop_leaves(id, V2::new(ledge.heap_x(), ledge.base().y));
-                self.air.shed(&mut ledge, 1.0, velocity, false);
+                self.air.shed(&mut ledge, 1.0, velocity, false, None);
             } else if self.air.clock - self.space_changed_at < 0.6 {
                 self.keep_dormant(id, ledge);
             } else {
@@ -1248,7 +1252,7 @@ impl SnowSimulation {
         {
             let (id, mut ledge, _) = self.parking.remove(0);
             self.drop_leaves(id, V2::new(ledge.heap_x(), ledge.base().y));
-            self.air.shed(&mut ledge, 1.0, V2::ZERO, false);
+            self.air.shed(&mut ledge, 1.0, V2::ZERO, false, None);
         }
     }
 
@@ -2301,7 +2305,7 @@ impl Air {
         let jumped = displacement.length() / elapsed > JUMP_SPEED;
         if jumped {
             // The window vanished from under the snow and reappeared elsewhere: nothing carried the snow along.
-            self.shed(ledge, 1.0, V2::ZERO, true);
+            self.shed(ledge, 1.0, V2::ZERO, true, None);
             ledge.offset = V2::ZERO;
             ledge.offset_velocity = V2::ZERO;
             ledge.track_velocity = V2::ZERO;
@@ -2431,7 +2435,7 @@ impl Air {
 
         let shakes = if leafy { LEAF_SHAKING } else { SHAKING };
         if lift > if leafy { LEAF_BREAK_LIFT } else { BREAK_LIFT } {
-            self.shed(ledge, 1.0, carried, true);
+            self.shed(ledge, 1.0, carried, true, None);
             ledge.offset = V2::ZERO;
             ledge.offset_velocity = V2::ZERO;
             ledge.thrown = Some(carried);
@@ -2519,7 +2523,7 @@ impl Air {
     /// Turns part of a ledge's snow into falling snow where it lies: a few columns at a time hold together
     /// as a lump, the rest pours off as powder. A heap of leaves thrown off `as_leaves` shows as the leaves it is
     /// made of; one left by a window closing or hiding goes unseen, leaving only the leaves lying on it to fall.
-    fn shed(&mut self, ledge: &mut SnowLayer, share: f32, velocity: V2, as_leaves: bool) {
+    fn shed(&mut self, ledge: &mut SnowLayer, share: f32, velocity: V2, as_leaves: bool, columns: Option<&[bool]>) {
         let shown = if as_leaves && ledge.leaves.iter().any(|&l| l > 0.0) {
             // The leaves lying on top go along with the rest, and count among the leaves the heap shows.
             let area = ledge.leaves.iter().map(|l| l.max(0.0)).sum::<f32>() * share * COLUMN_WIDTH;
@@ -2537,7 +2541,7 @@ impl Air {
             let mut highest = -f32::MAX;
             for i in start..end {
                 let h = ledge.heights[i];
-                if h <= 0.05 {
+                if h <= 0.05 || !columns.is_none_or(|c| c[i]) {
                     continue;
                 }
                 snow += h * share * COLUMN_WIDTH * (1.0 - ledge.blend(i).leaves);
@@ -2548,7 +2552,7 @@ impl Air {
             let cohesion = if snow > 14.0 { self.random.range(0.4, 0.7) } else { 0.0 };
             for i in start..end {
                 let h = ledge.heights[i];
-                if h <= 0.05 {
+                if h <= 0.05 || !columns.is_none_or(|c| c[i]) {
                     continue;
                 }
                 let amount = h * share;

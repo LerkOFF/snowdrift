@@ -251,28 +251,25 @@ final class SnowLayer {
         }
     }
 
-    /// How long snow lies under a window in front before it is let go.
-    static let burialLimit: Float = 1.0
+    /// How long snow lies under a window in front before it falls off.
+    static let burialLimit: Float = 0.35
 
-    /// Lets go of the snow lying under windows in front for good: a window that went behind another doesn't keep its
-    /// drift to show again once it comes back. Returns whether any column lost its snow.
-    func forgetBuried(dt: Float) -> Bool {
-        var lost = false
+    /// Counts how long each column has lain under a window in front. The columns that have lain there too long and
+    /// still hold snow, or nothing if there are none: that snow is to be let fall.
+    func buriedSnow(dt: Float) -> [Bool]? {
+        var mask: [Bool]?
         for i in heights.indices {
             guard covered[i] else {
                 buried[i] = 0
                 continue
             }
             buried[i] += dt
-            if buried[i] > Self.burialLimit && (heights[i] > 0 || leaves[i] > 0) {
-                heights[i] = 0
-                packed[i] = 0
-                leaves[i] = 0
-                petals[i] = 0
-                lost = true
+            if buried[i] > Self.burialLimit && (heights[i] > 0.05 || leaves[i] > 0) {
+                if mask == nil { mask = Array(repeating: false, count: heights.count) }
+                mask?[i] = true
             }
         }
-        return lost
+        return mask
     }
 
     /// Whether the snow at `x` has been shut away under a window in front for too long to be kept.

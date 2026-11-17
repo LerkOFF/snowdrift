@@ -333,28 +333,24 @@ impl SnowLayer {
         }
     }
 
-    /// How long snow lies under a window in front before it is let go.
-    pub const BURIAL_LIMIT: f32 = 1.0;
+    /// How long snow lies under a window in front before it falls off.
+    pub const BURIAL_LIMIT: f32 = 0.35;
 
-    /// Lets go of the snow lying under windows in front for good: a window that went behind another doesn't keep its
-    /// drift to show again once it comes back. Whether any column lost its snow.
-    pub fn forget_buried(&mut self, dt: f32) -> bool {
-        let mut lost = false;
+    /// Counts how long each column has lain under a window in front. The columns that have lain there too long and
+    /// still hold snow, or nothing if there are none: that snow is to be let fall.
+    pub fn buried_snow(&mut self, dt: f32) -> Option<Vec<bool>> {
+        let mut mask: Option<Vec<bool>> = None;
         for i in 0..self.heights.len() {
             if !self.covered[i] {
                 self.buried[i] = 0.0;
                 continue;
             }
             self.buried[i] += dt;
-            if self.buried[i] > Self::BURIAL_LIMIT && (self.heights[i] > 0.0 || self.leaves[i] > 0.0) {
-                self.heights[i] = 0.0;
-                self.packed[i] = 0.0;
-                self.leaves[i] = 0.0;
-                self.petals[i] = 0.0;
-                lost = true;
+            if self.buried[i] > Self::BURIAL_LIMIT && (self.heights[i] > 0.05 || self.leaves[i] > 0.0) {
+                mask.get_or_insert_with(|| vec![false; self.heights.len()])[i] = true;
             }
         }
-        lost
+        mask
     }
 
     /// Whether the snow at `x` has been shut away under a window in front for too long to be kept.

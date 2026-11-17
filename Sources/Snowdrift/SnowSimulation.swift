@@ -707,12 +707,16 @@ final class SnowSimulation {
     }
 
     /// Returns whether anything visible changed.
-    /// Snow on a window that has gone behind another stays hidden only for a moment: then it is gone, and the window
-    /// comes back bare.
+    /// Snow on a window that has gone behind another falls off it after a moment, as off a window that closed, and the
+    /// window comes back bare.
     private func forgetBuriedSnow(dt: Float) {
-        var lost = false
-        for ledge in ledgeList where ledge.forgetBuried(dt: dt) { lost = true }
-        if lost {
+        var shedAny = false
+        for ledge in ledgeList {
+            guard let columns = ledge.buriedSnow(dt: dt) else { continue }
+            shed(ledge, share: 1, velocity: ledge.trackVelocity + ledge.offsetVelocity, columns: columns)
+            shedAny = true
+        }
+        if shedAny {
             lying.removeAll { $0.layer.isBuried(at: $0.layer.heapX + $0.x) }
             heightsChanged = true
         }
@@ -1505,7 +1509,7 @@ final class SnowSimulation {
     /// Turns part of a ledge's snow into falling snow where it lies: a few columns at a time hold together
     /// as a lump, the rest pours off as powder. A heap of leaves thrown off `asLeaves` shows as the leaves it is
     /// made of; one left by a window closing or hiding goes unseen, leaving only the leaves lying on it to fall.
-    private func shed(_ ledge: SnowLayer, share: Float, velocity: SIMD2<Float>, asLeaves: Bool = false) {
+    private func shed(_ ledge: SnowLayer, share: Float, velocity: SIMD2<Float>, asLeaves: Bool = false, columns: [Bool]? = nil) {
         var shown: Float = 0
         if asLeaves && ledge.leaves.contains(where: { $0 > 0 }) {
             // The leaves lying on top go along with the rest, and count among the leaves the heap shows.
@@ -1524,7 +1528,7 @@ final class SnowSimulation {
             var snow: Float = 0
             var lowest = Float.greatestFiniteMagnitude
             var highest = -Float.greatestFiniteMagnitude
-            for i in start..<end where ledge.heights[i] > 0.05 {
+            for i in start..<end where ledge.heights[i] > 0.05 && (columns?[i] ?? true) {
                 let h = ledge.heights[i]
                 snow += h * share * columnWidth * (1 - ledge.blend(i).leaves)
                 lowest = min(lowest, ledge.floor(i) + h * (1 - share))
@@ -1532,7 +1536,7 @@ final class SnowSimulation {
             }
             // Only snow holds together in lumps.
             let cohesion = snow > 14 ? random.range(0.4, 0.7) : 0
-            for i in start..<end where ledge.heights[i] > 0.05 {
+            for i in start..<end where ledge.heights[i] > 0.05 && (columns?[i] ?? true) {
                 let h = ledge.heights[i]
                 let amount = h * share
                 let blend = ledge.blend(i)
