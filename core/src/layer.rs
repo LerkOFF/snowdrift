@@ -333,8 +333,8 @@ impl SnowLayer {
         }
     }
 
-    /// How long snow lies under a window in front before it falls off.
-    pub const BURIAL_LIMIT: f32 = 0.35;
+    /// How long snow lies under a window in front before it falls off: none, it falls as soon as the window is covered.
+    pub const BURIAL_LIMIT: f32 = 0.0;
 
     /// Counts how long each column has lain under a window in front. The columns that have lain there too long and
     /// still hold snow, or nothing if there are none: that snow is to be let fall.
