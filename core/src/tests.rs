@@ -250,6 +250,30 @@ fn snow_waiting_for_windows_away_drops_the_longest_gone_first() {
 }
 
 #[test]
+fn snow_on_a_window_that_went_behind_another_is_gone_when_it_returns() {
+    let none = HashSet::new();
+    let back = surface(1, 100.0, 400.0, 600.0);
+    let mut simulation = SnowSimulation::new(1280.0, 800.0, 0.75);
+    simulation.update_windows(&[back.clone()], 0.2, &none, &none, false);
+    run(&mut simulation, 40.0, AWAY);
+    simulation.set_intensity(0.0);
+    run(&mut simulation, 8.0, AWAY);
+    let snow_on = |simulation: &SnowSimulation| {
+        piles(simulation).iter().filter(|(origin, _)| origin.y > 300.0 && (origin.x - back.frame.x).abs() < 1.0).map(|pile| pile.1).sum::<f32>()
+    };
+    assert!(snow_on(&simulation) > 0.0, "the window collected no snow");
+    // Another window comes in front of its whole top edge, and stays there.
+    let front = Rect { x: 0.0, y: 0.0, width: 1280.0, height: 480.0 };
+    let covered = WindowSurface { blockers: vec![front], cover: vec![front], ..back.clone() };
+    simulation.update_windows(&[covered], 0.2, &none, &none, false);
+    run(&mut simulation, 3.0, AWAY);
+    // It comes back to the front.
+    simulation.update_windows(&[back.clone()], 0.2, &none, &none, false);
+    simulation.step(DT, AWAY);
+    assert_eq!(snow_on(&simulation), 0.0, "the snow came back with the window");
+}
+
+#[test]
 fn a_calm_gust_melts_the_drifts_where_they_lie() {
     let mut simulation = SnowSimulation::new(1280.0, 800.0, 0.75);
     run(&mut simulation, 90.0, AWAY);

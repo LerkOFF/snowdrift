@@ -31,6 +31,10 @@ final class SnowLayer {
     private(set) var bed: [Float]
     private(set) var capacity: [Float] = []
     private(set) var visible: [Bool]
+    /// How long each column has lain under a window in front of this one, in seconds: snow shut away that long is gone.
+    private(set) var buried: [Float]
+    /// Where a column lies under a window in front, as opposed to past the edge of the screen.
+    private var covered: [Bool]
     private(set) var top: Float = 0
     private(set) var bedDepth: Float = 0
     var occluders: [SIMD4<Float>] = []
@@ -97,6 +101,8 @@ final class SnowLayer {
         petals = Array(repeating: 0, count: columns)
         bed = Array(repeating: 0, count: columns)
         visible = Array(repeating: true, count: columns)
+        buried = Array(repeating: 0, count: columns)
+        covered = Array(repeating: false, count: columns)
         supported = Array(repeating: false, count: columns)
         updateCapacity()
     }
@@ -219,6 +225,8 @@ final class SnowLayer {
         petals = freshPetals ?? Array(repeating: 0, count: fresh.count)
         packed = Array(repeating: 0, count: fresh.count)
         visible = Array(repeating: true, count: fresh.count)
+        buried = Array(repeating: 0, count: fresh.count)
+        covered = Array(repeating: false, count: fresh.count)
         supported = Array(repeating: false, count: fresh.count)
         supportedRange = nil
         updateCapacity()
@@ -237,8 +245,40 @@ final class SnowLayer {
         for i in heights.indices {
             let x = centerX(i)
             let y = origin.y + bed[i] + 1
-            visible[i] = seen.contains(x) && !blockers.contains { x >= $0.x && x < $0.z && y >= $0.y && y < $0.w }
+            let under = blockers.contains { x >= $0.x && x < $0.z && y >= $0.y && y < $0.w }
+            covered[i] = under && seen.contains(x)
+            visible[i] = seen.contains(x) && !under
         }
+    }
+
+    /// How long snow lies under a window in front before it is let go.
+    static let burialLimit: Float = 1.0
+
+    /// Lets go of the snow lying under windows in front for good: a window that went behind another doesn't keep its
+    /// drift to show again once it comes back. Returns whether any column lost its snow.
+    func forgetBuried(dt: Float) -> Bool {
+        var lost = false
+        for i in heights.indices {
+            guard covered[i] else {
+                buried[i] = 0
+                continue
+            }
+            buried[i] += dt
+            if buried[i] > Self.burialLimit && (heights[i] > 0 || leaves[i] > 0) {
+                heights[i] = 0
+                packed[i] = 0
+                leaves[i] = 0
+                petals[i] = 0
+                lost = true
+            }
+        }
+        return lost
+    }
+
+    /// Whether the snow at `x` has been shut away under a window in front for too long to be kept.
+    func isBuried(at x: Float) -> Bool {
+        guard let i = index(at: x) else { return false }
+        return buried[i] > Self.burialLimit
     }
 
     func refreshTop() {

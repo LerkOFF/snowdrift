@@ -1,0 +1,21 @@
+[package]
+name = "snowdrift-linux"
+version = "0.3.0"
+edition = "2024"
+publish = false
+description = "Snowfall over every window on Linux"
+
+[[bin]]
+name = "snowdrift"
+path = "src/main.rs"
+
+[dependencies]
+snowdrift-core = { path = "../core" }
+x11rb = { version = "0.13", features = ["shape", "randr", "xfixes", "composite"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+opt-level = 3

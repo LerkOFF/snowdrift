@@ -1,0 +1,25 @@
+# Maintainer: LerkOFF
+pkgname=snowdrift
+pkgver=0.3.0
+pkgrel=1
+pkgdesc="Snowfall over all your windows"
+arch=('x86_64' 'aarch64')
+url="https://github.com/LerkOFF/snowdrift"
+license=('MIT')
+makedepends=('cargo')
+optdepends=('picom: a compositing manager, for window managers that have none')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "$pkgname-$pkgver/linux"
+    cargo build --release
+}
+
+package() {
+    cd "$pkgname-$pkgver/linux"
+    install -Dm755 target/release/snowdrift "$pkgdir/usr/bin/snowdrift"
+    target/release/snowdrift desktop-entry snowdrift | install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/snowdrift.desktop"
+    install -Dm644 assets/snowdrift.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/snowdrift.png"
+    install -Dm644 ../LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

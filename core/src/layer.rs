@@ -55,6 +55,10 @@ pub struct SnowLayer {
     /// The bed under each column relative to `origin.y`; zero along a flat edge, negative where a corner rounds off.
     pub bed: Vec<f32>,
     pub visible: Vec<bool>,
+    /// How long each column has lain under a window in front of this one, in seconds: snow shut away that long is gone.
+    pub buried: Vec<f32>,
+    /// Where a column lies under a window in front, as opposed to past the edge of the screen.
+    covered: Vec<bool>,
     pub top: f32,
     pub bed_depth: f32,
     pub occluders: Vec<[f32; 4]>,
@@ -121,6 +125,8 @@ impl SnowLayer {
             petals: vec![0.0; columns],
             bed: vec![0.0; columns],
             visible: vec![true; columns],
+            buried: vec![0.0; columns],
+            covered: vec![false; columns],
             top: 0.0,
             bed_depth: 0.0,
             occluders: Vec::new(),
@@ -294,6 +300,8 @@ impl SnowLayer {
         self.petals = petals;
         self.packed = vec![0.0; count];
         self.visible = vec![true; count];
+        self.buried = vec![0.0; count];
+        self.covered = vec![false; count];
         self.supported = vec![false; count];
         self.supported_range = None;
         self.update_capacity();
@@ -318,8 +326,40 @@ impl SnowLayer {
         for i in 0..self.heights.len() {
             let x = self.center_x(i);
             let y = self.origin.y + self.bed[i] + 1.0;
-            self.visible[i] = x >= seen.0 && x <= seen.1 && !blockers.iter().any(|b| x >= b[0] && x < b[2] && y >= b[1] && y < b[3]);
+            let under = blockers.iter().any(|b| x >= b[0] && x < b[2] && y >= b[1] && y < b[3]);
+            let inside = x >= seen.0 && x <= seen.1;
+            self.covered[i] = under && inside;
+            self.visible[i] = inside && !under;
         }
+    }
+
+    /// How long snow lies under a window in front before it is let go.
+    pub const BURIAL_LIMIT: f32 = 1.0;
+
+    /// Lets go of the snow lying under windows in front for good: a window that went behind another doesn't keep its
+    /// drift to show again once it comes back. Whether any column lost its snow.
+    pub fn forget_buried(&mut self, dt: f32) -> bool {
+        let mut lost = false;
+        for i in 0..self.heights.len() {
+            if !self.covered[i] {
+                self.buried[i] = 0.0;
+                continue;
+            }
+            self.buried[i] += dt;
+            if self.buried[i] > Self::BURIAL_LIMIT && (self.heights[i] > 0.0 || self.leaves[i] > 0.0) {
+                self.heights[i] = 0.0;
+                self.packed[i] = 0.0;
+                self.leaves[i] = 0.0;
+                self.petals[i] = 0.0;
+                lost = true;
+            }
+        }
+        lost
+    }
+
+    /// Whether the snow at `x` has been shut away under a window in front for too long to be kept.
+    pub fn is_buried(&self, x: f32) -> bool {
+        self.index(x).is_some_and(|i| self.buried[i] > Self::BURIAL_LIMIT)
     }
 
     /// Moves the layer and what it remembers of its window's path up by `by`, as the screen's coordinates shift under

@@ -801,6 +801,24 @@ impl SnowSimulation {
     }
 
     /// Returns whether anything visible changed.
+    /// Snow on a window that has gone behind another stays hidden only for a moment: then it is gone, and the window
+    /// comes back bare.
+    fn forget_buried_snow(&mut self, dt: f32) {
+        let mut lost = false;
+        for ledge in &mut self.layers[1..] {
+            lost |= ledge.forget_buried(dt);
+        }
+        if lost {
+            let (layers, ids) = (&self.layers, &self.ids);
+            self.lying.retain(|leaf| {
+                let Some(li) = ids.iter().position(|&id| id == leaf.layer) else { return true };
+                let layer = &layers[li];
+                li == 0 || !layer.is_buried(layer.heap_x() + leaf.x)
+            });
+            self.air.heights_changed = true;
+        }
+    }
+
     pub fn step(&mut self, dt: f32, cursor: V2) -> bool {
         self.air.clock += dt as f64;
         let was_moving = self.moving() || self.haunting.moving();
@@ -814,6 +832,7 @@ impl SnowSimulation {
         for ledge in &mut self.layers[1..] {
             self.air.carry(ledge, dt);
         }
+        self.forget_buried_snow(dt);
         self.track_cursor(cursor, dt);
         self.advance_plow(dt);
         self.pointer_low(dt);

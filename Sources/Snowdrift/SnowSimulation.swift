@@ -707,6 +707,17 @@ final class SnowSimulation {
     }
 
     /// Returns whether anything visible changed.
+    /// Snow on a window that has gone behind another stays hidden only for a moment: then it is gone, and the window
+    /// comes back bare.
+    private func forgetBuriedSnow(dt: Float) {
+        var lost = false
+        for ledge in ledgeList where ledge.forgetBuried(dt: dt) { lost = true }
+        if lost {
+            lying.removeAll { $0.layer.isBuried(at: $0.layer.heapX + $0.x) }
+            heightsChanged = true
+        }
+    }
+
     func step(dt: Float, cursor point: SIMD2<Float>) -> Bool {
         clock += Double(dt)
         let wasMoving = !flakes.isEmpty || !grains.isEmpty || !motes.isEmpty || !ghosts.isEmpty || !fallingSigns.isEmpty || !snowballs.isEmpty
@@ -718,6 +729,7 @@ final class SnowSimulation {
         slideWind = abs(slideWind) < 1 ? 0 : slideWind * exp(-dt / slideCalm)
         expireParking()
         for ledge in ledgeList { carry(ledge, dt: dt) }
+        forgetBuriedSnow(dt: dt)
         trackCursor(point, dt: dt)
         advancePlow(dt: dt)
         dockHover(dt: dt)
