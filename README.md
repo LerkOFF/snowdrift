@@ -1,12 +1,82 @@
-# Snowdrift ❄️
+<div align="center">
 
-Снегопад поверх всех окон на macOS, Windows и Linux. Снег ложится на верхние кромки окон, сползает вслед за окном, тает, разлетается от курсора. Когда сугробы внизу вырастают, выезжает снегоуборщик. Клики проходят сквозь, иконки в Dock нет, управление из меню-бара (macOS), системного трея (Windows) или командной строки (Linux).
+<img src="docs/images/icon.png" width="112" alt="Snowdrift">
 
-Snowfall for macOS, Windows and Linux: snow piles up on top of your windows, slides off when you move them, melts, flies apart under the cursor, and a snowplow clears the pile at the bottom of the screen. Click-through, menu bar or tray only.
+# Snowdrift
+
+**Снегопад поверх всех окон на macOS, Windows и Linux.**
+Снег ложится на кромки окон, сползает вместе с ними, а когда сугробы вырастают, выезжает снегоуборщик.
+
+*Snowfall for macOS, Windows and Linux: snow piles up on your windows, slides off when you move them, and a snowplow clears the pile.*
+
+[![Release](https://img.shields.io/github/v/release/LerkOFF/snowdrift?style=flat-square&color=4aa3ff)](https://github.com/LerkOFF/snowdrift/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-3fb950?style=flat-square)](LICENSE)
+![macOS](https://img.shields.io/badge/macOS-13%2B-black?style=flat-square&logo=apple)
+![Windows](https://img.shields.io/badge/Windows-10%2B-0078d4?style=flat-square&logo=windows)
+![Linux](https://img.shields.io/badge/Linux-X11%20%2F%20XWayland-f0a500?style=flat-square&logo=linux&logoColor=white)
+[![Downloads](https://img.shields.io/github/downloads/LerkOFF/snowdrift/total?style=flat-square&color=8b5cf6)](https://github.com/LerkOFF/snowdrift/releases)
+
+[Установка](#установка) · [Возможности](#возможности) · [Режимы](#режимы) · [Управление](#управление) · [Сборка](#сборка-из-исходников)
+
+<br>
+
+<img src="docs/images/snow.png" width="860" alt="Сугробы на верхних кромках окон">
+
+</div>
+
+<br>
+
+Клики проходят сквозь снег, значка в Dock нет, управление живёт в меню-баре (macOS), системном трее (Windows) или командной строке (Linux).
+
+## Возможности
+
+| | |
+|---|---|
+| ❄️ **Живой снег** | Снежинки с глубиной и разной плотностью: от лёгкого снегопада до метели |
+| 🪟 **Сугробы на окнах** | Снег ложится на верхнюю кромку каждого окна, двигается вместе с ним, рывок стряхивает часть, закрытое окно осыпается целиком |
+| 🚜 **Снегоуборщик** | Когда внизу много снега, выезжает вдоль нижнего края, сгребает его в вал и сбрасывает за край экрана. Вызвать можно и вручную |
+| 🖱️ **Курсор** | Разгребает сугроб и поднимает снежную пыль. Над Dock или панелью задач снег разлетается в стороны |
+| 🗂️ **Панели внутри окон** | По желанию: диалоги, всплывающие окна и большие картинки получают свой сугроб |
+| 🍂 **Пять режимов** | Снег, осенние листья, дождь, сакура и Хэллоуин |
+| ⚙️ **Настройки** | Плотность, прозрачность, таяние, скрытие от скриншотов, запуск при входе в систему |
+| 🌍 **Девять языков** | Интерфейс следует за языком системы (macOS и Windows) |
+
+<details>
+<summary><b>Как работают панели внутри окон</b></summary>
+
+<br>
+
+Положение панелей берётся у специальных возможностей системы. На macOS нужно разрешение «Универсальный доступ», на Windows работает через UI Automation, на Linux через шину AT-SPI (`snowdrift set panels on`). Что приложение не показывает системе, снега не получит.
+
+</details>
+
+## Снегоуборщик
+
+<div align="center">
+<img src="docs/images/plow.png" width="760" alt="Снегоуборщик едет вдоль нижнего края экрана">
+</div>
+
+Снегоуборщик прорисован вручную: кабина, бункер, отвал с резиновой кромкой, вращающиеся колёса, дым и мигалка. Он гребёт снег перед ковшом и сбрасывает его за край экрана.
+
+## Режимы
+
+<table>
+<tr>
+<td align="center" width="50%"><img src="docs/images/autumn.png" alt="Осенние листья"><br><b>Осень</b></td>
+<td align="center" width="50%"><img src="docs/images/blossom.png" alt="Сакура"><br><b>Сакура</b></td>
+</tr>
+</table>
+
+Ещё есть дождь и Хэллоуин. Кадры сняты в Linux-версии на виртуальном экране с тестовыми окнами.
 
 ## Установка
 
-### macOS
+Нужна macOS 13 или новее, Windows 10 или новее, либо Linux с X11 или XWayland и композитором.
+
+<details open>
+<summary><b>macOS</b></summary>
+
+<br>
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/LerkOFF/snowdrift/main/install.sh | bash
@@ -15,9 +85,14 @@ curl -fsSL https://raw.githubusercontent.com/LerkOFF/snowdrift/main/install.sh |
 Приложение ставится в `~/Applications/Snowdrift.app` и сразу запускается. Другая папка: `SNOWDRIFT_DIR=/Applications`.
 Удалить: `curl -fsSL https://raw.githubusercontent.com/LerkOFF/snowdrift/main/install.sh | bash -s -- --uninstall`.
 
-Нужна macOS 13 или новее, Apple Silicon или Intel. Можно и вручную: скачать `Snowdrift.zip` из [Releases](https://github.com/LerkOFF/snowdrift/releases/latest), распаковать и открыть.
+Apple Silicon или Intel. Можно и вручную: скачать `Snowdrift.zip` из [Releases](https://github.com/LerkOFF/snowdrift/releases/latest), распаковать и открыть.
 
-### Windows
+</details>
+
+<details>
+<summary><b>Windows</b></summary>
+
+<br>
 
 В PowerShell:
 
@@ -28,9 +103,14 @@ irm https://raw.githubusercontent.com/LerkOFF/snowdrift/main/install.ps1 | iex
 Скрипт скачивает `Snowdrift.exe`, копирует его в `%LOCALAPPDATA%\Programs\Snowdrift`, добавляет ярлык в меню «Пуск» и запись в «Установку и удаление программ» и запускает. Права администратора не нужны.
 Удалить: «Параметры, Приложения» или `& "$env:LOCALAPPDATA\Programs\Snowdrift\Snowdrift.exe" --uninstall`.
 
-Нужна Windows 10 или новее, x64. Можно и вручную: скачать `Snowdrift.exe` из [Releases](https://github.com/LerkOFF/snowdrift/releases/latest) и запустить с ключом `--install`.
+Windows 10 или новее, x64. Можно и вручную: скачать `Snowdrift.exe` из [Releases](https://github.com/LerkOFF/snowdrift/releases/latest) и запустить с ключом `--install`.
 
-### Linux
+</details>
+
+<details>
+<summary><b>Linux</b></summary>
+
+<br>
 
 Одной командой (x86_64 и aarch64, под себя в `~/.local`, права root не нужны):
 
@@ -38,9 +118,26 @@ irm https://raw.githubusercontent.com/LerkOFF/snowdrift/main/install.ps1 | iex
 curl -fsSL https://raw.githubusercontent.com/LerkOFF/snowdrift/main/install.sh | bash
 ```
 
-Или пакетом из [Releases](https://github.com/LerkOFF/snowdrift/releases/latest): `snowdrift_<версия>_amd64.deb` и `_arm64.deb` (Debian, Ubuntu, Mint), `snowdrift-<версия>-1.x86_64.rpm` и `.aarch64.rpm` (Fedora, openSUSE), либо `Snowdrift-linux-<arch>.tar.gz` с готовым бинарником (собран статически, запускается на любом дистрибутиве). Для Arch есть `linux/packaging/PKGBUILD` (на Arch не проверялся).
+Или пакетом из [Releases](https://github.com/LerkOFF/snowdrift/releases/latest):
 
-Управление: программа ищется в меню приложений как «Snowdrift», действия (снегоуборщик, сдуть снег, выйти) есть в контекстном меню её ярлыка, а из терминала:
+| Дистрибутив | Файл |
+|---|---|
+| Debian, Ubuntu, Mint | `snowdrift_<версия>_amd64.deb`, `snowdrift_<версия>_arm64.deb` |
+| Fedora, openSUSE | `snowdrift-<версия>-1.x86_64.rpm`, `snowdrift-<версия>-1.aarch64.rpm` |
+| любой другой | `Snowdrift-linux-<arch>.tar.gz`, бинарник собран статически |
+| Arch | `linux/packaging/PKGBUILD` (на Arch не проверялся) |
+
+**Что нужно:** сеанс X11 (Xorg) или Wayland с XWayland и **композитор**. В GNOME, KDE, Xfce, Cinnamon, MATE он уже есть; в i3, bspwm, dwm, qtile, openbox его нет, запустите `picom -b`. Без композитора программа скажет об этом и не запустится.
+
+Тайловые менеджеры работают: рамки окон берутся у X-сервера, окна вплотную друг к другу снега на кромке не держат, зазоры между окнами (gaps) он использует. Панель внизу экрана (рабочая область) снег обходит, ложится на неё сверху.
+
+**Ограничения:** в сеансе Wayland снег ложится только на окна приложений XWayland, окна родных Wayland-приложений сугробов не получают (Wayland не отдаёт положение чужих окон), а снег поверх них падает и накапливается на дне экрана. Значка в трее и Хэллоуина в Linux-версии пока нет.
+
+</details>
+
+## Управление
+
+На macOS управление в меню-баре, на Windows в системном трее. На Linux программа ищется в меню приложений как «Snowdrift», действия (снегоуборщик, сдуть снег, выйти) есть в контекстном меню её ярлыка, а из терминала:
 
 ```bash
 snowdrift start            # запустить в фоне (snowdrift run: в этом терминале)
@@ -53,23 +150,12 @@ snowdrift autostart on     # запускать при входе
 
 Настройки лежат в `~/.config/snowdrift/config`. Удалить: `snowdrift uninstall` или `install.sh --uninstall`.
 
-Что нужно: сеанс X11 (Xorg) или Wayland с XWayland и **композитор** (в GNOME, KDE, Xfce, Cinnamon, MATE он уже есть; в i3, bspwm, dwm, qtile, openbox его нет, запустите `picom -b`). Без композитора программа скажет об этом и не запустится.
-Тайловые менеджеры работают: рамки окон берутся у X-сервера, окна вплотную друг к другу снега на кромке не держат, зазоры между окнами (gaps) он использует. Панель внизу экрана (рабочая область) снег обходит, ложится на неё сверху.
-Ограничения: в сеансе Wayland снег ложится только на окна приложений XWayland, окна родных Wayland-приложений сугробов не получают (Wayland не отдаёт положение чужих окон), а снег поверх них падает и накапливается на дне экрана. Значка в трее и Хэллоуина в Linux-версии пока нет.
-
-## Что умеет
-
-- Снег с глубиной и разной плотностью: от лёгкого до метели; режимы снега, осенних листьев, дождя, сакуры и Хеллоуина.
-- Сугробы на верхней кромке каждого окна. Окно двигается, и снег сдвигается вместе с ним, рывок стряхивает часть, закрытое окно осыпается целиком.
-- Снег на панелях внутри окон (по желанию, пункт «Снег на панелях» в настройках): диалоги, всплывающие окна и большие картинки, открытые поверх страницы, получают свой сугроб. Положение панелей берётся у специальных возможностей системы: на macOS нужно разрешение «Универсальный доступ», на Windows работает через UI Automation, на Linux через шину AT-SPI (`snowdrift set panels on`). Что приложение не показывает системе, снега не получит.
-- Курсор разгребает сугроб и поднимает снежную пыль.
-- Снегоуборщик: когда снега внизу много, едет вдоль нижнего края, сгребает его в вал и сбрасывает за край экрана. Вызвать можно из меню.
-- Курсор над Dock или панелью задач: снег рядом разлетается в стороны.
-- Таяние, прозрачность, скрытие от скриншотов, запуск при входе в систему.
-- Круглое стартовое окно, которое при нажатии рассыпается снегом.
-- Девять языков интерфейса по языку системы (macOS и Windows).
-
 ## Сборка из исходников
+
+<details>
+<summary><b>macOS, Windows, Linux</b></summary>
+
+<br>
 
 macOS (нужны Command Line Tools: `xcode-select --install`):
 
@@ -91,7 +177,19 @@ Linux (Rust, нужен Docker, собирает статические бина
 ./linux/build.sh           # dist/linux
 ```
 
+</details>
+
 Общая симуляция снега лежит в `core/` (Rust, `cargo test` в этой папке), версия в файле `VERSION`.
+
+## Устройство
+
+| Папка | Что внутри |
+|---|---|
+| `Sources/Snowdrift/` | macOS: Swift и Metal |
+| `windows/` | Windows: Rust, Direct2D и D3D11 |
+| `linux/` | Linux: Rust, x11rb, программный рендерер без GPU |
+| `core/` | общее ядро симуляции на Rust с тестами |
+| `locales/` | строки интерфейса на девяти языках |
 
 ## Лицензия
 
