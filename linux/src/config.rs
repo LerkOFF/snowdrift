@@ -16,6 +16,8 @@ pub struct Settings {
     pub snow_on_windows: bool,
     /// The snow stays over full-screen apps instead of stepping out of their way.
     pub over_full_screen: bool,
+    /// Snow also settles on dialogs and big pictures inside windows, read through the accessibility bus.
+    pub panels: bool,
     pub picked: Picked,
 }
 
@@ -28,12 +30,13 @@ impl Default for Settings {
             melt: true,
             snow_on_windows: true,
             over_full_screen: false,
+            panels: false,
             picked: Picked::load(None, None, None, [None, None]),
         }
     }
 }
 
-pub const KEYS: [&str; 8] = ["intensity", "opacity", "ground", "melt", "windows", "fullscreen", "mode", "mixed"];
+pub const KEYS: [&str; 9] = ["intensity", "opacity", "ground", "melt", "windows", "fullscreen", "panels", "mode", "mixed"];
 
 pub fn dir() -> PathBuf {
     let base = std::env::var_os("XDG_CONFIG_HOME")
@@ -93,13 +96,14 @@ impl Settings {
     pub fn to_text(&self) -> String {
         let on = |v: bool| if v { "on" } else { "off" };
         format!(
-            "intensity={}\nopacity={}\nground={}\nmelt={}\nwindows={}\nfullscreen={}\nmode={}\nmixed={}\nmix={},{}\n",
+            "intensity={}\nopacity={}\nground={}\nmelt={}\nwindows={}\nfullscreen={}\npanels={}\nmode={}\nmixed={}\nmix={},{}\n",
             self.intensity,
             self.opacity,
             on(self.ground),
             on(self.melt),
             on(self.snow_on_windows),
             on(self.over_full_screen),
+            on(self.panels),
             mode_name(self.picked.mode),
             on(self.picked.mixed),
             mode_name(self.picked.mix[0]),
@@ -118,6 +122,7 @@ impl Settings {
             "melt" => self.melt = switch()?,
             "windows" => self.snow_on_windows = switch()?,
             "fullscreen" => self.over_full_screen = switch()?,
+            "panels" => self.panels = switch()?,
             "mode" => {
                 let mode = mode_from(value).ok_or("mode is snow, autumn, rain or blossom")?;
                 self.picked.pick(mode);

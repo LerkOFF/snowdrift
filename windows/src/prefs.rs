@@ -33,6 +33,8 @@ pub struct Settings {
     pub show_in_screenshots: bool,
     /// The snow also settles on what the desktop draws without a window of its own: a selection dragged across it.
     pub deep_interaction: bool,
+    /// The snow also settles on dialogs and big pictures inside windows, read through UI Automation.
+    pub panels: bool,
     pub welcomed: bool,
     /// Unix seconds of the first run, or 0 for an install older than the stamp.
     pub installed_at: u32,
@@ -73,6 +75,7 @@ impl Settings {
             behind_taskbar: read(w!("behindTaskbar")).is_some_and(|v| v != 0),
             show_in_screenshots: read(w!("showInScreenshots")).is_some_and(|v| v != 0),
             deep_interaction: read(w!("deepInteraction")).is_some_and(|v| v != 0),
+            panels: read(w!("snowOnPanels")).is_some_and(|v| v != 0),
             welcomed,
             installed_at,
             halloween: Choice { on: read(w!("halloweenOn")).is_some_and(|v| v != 0), skipped: read(w!("halloweenSkipped")).unwrap_or(0) },
@@ -92,6 +95,7 @@ impl Settings {
         write(w!("behindTaskbar"), self.behind_taskbar as u32);
         write(w!("showInScreenshots"), self.show_in_screenshots as u32);
         write(w!("deepInteraction"), self.deep_interaction as u32);
+        write(w!("snowOnPanels"), self.panels as u32);
         write(w!("welcomed"), self.welcomed as u32);
         write(w!("installedAt"), self.installed_at);
         write(w!("halloweenOn"), self.halloween.on as u32);

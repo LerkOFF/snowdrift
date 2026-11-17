@@ -4,6 +4,7 @@ mod canvas;
 mod config;
 mod control;
 mod install;
+mod panels;
 mod render;
 mod x11;
 
@@ -31,7 +32,7 @@ Usage: snowdrift [command]
   plow                   send the snowplow along the bottom of the screen
   clear                  blow the snow away
   set <name> <value>     change a setting: intensity 0-100, opacity 10-100, ground on|off, melt on|off,
-                         windows on|off, fullscreen on|off, mode snow|autumn|rain|blossom, mixed on|off
+                         windows on|off, fullscreen on|off, panels on|off, mode snow|autumn|rain|blossom, mixed on|off
   status                 what is running and how it is set
   autostart on|off       start at login
   install                put the program, launcher entry and icon in your home folder
@@ -207,6 +208,8 @@ Turn on compositing in your desktop's settings, or start one (for example `picom
     let mut clients: Vec<Client> = Vec::new();
     let mut known: HashSet<u32> = HashSet::new();
     let mut windows_at = Instant::now() - Duration::from_secs(1);
+    let mut panels_at = Instant::now();
+    panels::set_enabled(settings.panels && settings.snow_on_windows);
     let mut changed_at = Instant::now();
     let mut monitors_at = Instant::now();
     let mut quit = false;
@@ -232,6 +235,9 @@ Turn on compositing in your desktop's settings, or start one (for example `picom
                 (Some("set"), Some(name), Some(value)) => match settings.set(name, value) {
                     Ok(()) => {
                         settings.save();
+                        panels::set_enabled(settings.panels && settings.snow_on_windows);
+                        windows_at = now - Duration::from_secs(1);
+                        clients.clear();
                         for screen in &mut screens {
                             apply(&mut screen.simulation, &settings);
                             screen.simulation.switch_modes(&settings.picked.modes(), 1.0, false);
@@ -277,14 +283,24 @@ Turn on compositing in your desktop's settings, or start one (for example `picom
         if settings.snow_on_windows && now.duration_since(windows_at) >= Duration::from_millis(33) {
             windows_at = now;
             let fresh = display.clients();
-            if fresh != clients {
+            // The process in front tells the panel reader whose tree to look at.
+            if panels::enabled() && now.duration_since(panels_at) >= Duration::from_millis(250) {
+                panels_at = now;
+                panels::set_active_pid(display.active_pid().unwrap_or(0));
+            }
+            let panels_changed = panels::take_changed();
+            if fresh != clients || panels_changed {
                 clients = fresh;
                 let interval = now.duration_since(changed_at).as_secs_f32().clamp(1.0 / 120.0, 0.25);
                 changed_at = now;
                 let open: HashSet<u32> = clients.iter().map(|c| c.id).collect();
                 let away: HashSet<isize> = clients.iter().filter(|c| c.elsewhere).map(|c| c.id as isize).collect();
+                let inside = if panels::enabled() { panels::all() } else { Vec::new() };
                 for screen in &mut screens {
-                    let (surfaces, covers) = surfaces_for(&clients, screen, scale);
+                    let (surfaces, covers) = surfaces_for(&clients, &inside, screen, scale);
+                    if std::env::var_os("SNOWDRIFT_DEBUG").is_some() {
+                        eprintln!("surfaces: {} panels: {} clients: {:?}", surfaces.len(), inside.len(), clients.iter().map(|c| (c.id, c.x, c.y, c.width, c.height)).collect::<Vec<_>>());
+                    }
                     screen.simulation.covers = covers;
                     screen.simulation.forget_closed(|id| open.contains(&(id as u32)));
                     if surfaces != screen.surfaces {
@@ -418,7 +434,7 @@ fn bottom_inset(display: &Display, monitors: &[Monitor]) -> HashMap<usize, u32> 
 
 /// The windows on one display as ledges for the snow, front to back with what hides what, and the frames of all of
 /// them for the pumpkin-free "covers" list.
-fn surfaces_for(clients: &[Client], screen: &Screen, scale: f32) -> (Vec<WindowSurface>, Vec<[f32; 4]>) {
+fn surfaces_for(clients: &[Client], inside: &[panels::Panel], screen: &Screen, scale: f32) -> (Vec<WindowSurface>, Vec<[f32; 4]>) {
     let (ax, ay, aw, ah) = screen.area;
     let (width, height) = (aw as f32 / scale, ah as f32 / scale);
     let local = |c: &Client| Rect {
@@ -450,21 +466,66 @@ fn surfaces_for(clients: &[Client], screen: &Screen, scale: f32) -> (Vec<WindowS
         // A window lying across displays carries its snow on the one most of it is on.
         let on_this = owner(clients, client, screen) ;
         let room_above = (client.y - ay as f32) / scale >= 6.0 && frame.max_y() < height;
+        // Panels inside the window in front that holds them: each catches snow on its top edge. The snow falls through
+        // the window's own edge above them, down inside the window, so that edge has a gap over each.
+        let mut held: Vec<(panels::Kind, Rect)> = Vec::new();
+        if on_this && !fills && !inside.is_empty() && is_front_holder(clients, client, inside) {
+            for panel in inside.iter().filter(|p| holds(client, p)).take(6) {
+                let outer = Rect {
+                    x: (panel.x - ax as f32) / scale,
+                    y: ((ay + ah as i32) as f32 - (panel.y + panel.height)) / scale,
+                    width: panel.width / scale,
+                    height: panel.height / scale,
+                };
+                if overlaps(&outer) && (panel.y - ay as f32) / scale >= 6.0 && outer.max_y() < height {
+                    held.push((panel.kind, outer));
+                }
+            }
+        }
+        let shafts: Vec<Rect> = held
+            .iter()
+            .map(|(_, outer)| Rect { x: outer.x, y: outer.max_y() - 1.0, width: outer.width, height: frame.max_y() - outer.max_y() + 6.0 })
+            .collect();
         if on_this && room_above && !boxed_in(client.id, &frame) && !fills && frame.width >= 80.0 && frame.height >= 40.0 {
             let radius = (client.radius / scale).min(frame.width / 2.0).min(frame.height / 2.0);
             let region = Rect { x: frame.x, y: frame.max_y() - radius, width: frame.width, height: 40.0 + radius };
+            let mut hiding: Vec<Rect> = blockers.iter().filter(|b| touches(b, &region)).copied().collect();
+            hiding.extend(shafts.iter().copied());
             surfaces.push(WindowSurface {
                 id: client.id as isize,
                 frame,
-                blockers: blockers.iter().filter(|b| touches(b, &region)).copied().collect(),
+                blockers: hiding,
                 cover: blockers.iter().filter(|b| touches(b, &frame)).copied().collect(),
                 corner_radius: radius,
                 corner_exponent: 2.0,
             });
         }
+        for (index, (kind, outer)) in held.iter().enumerate() {
+            let radius = (if *kind == panels::Kind::Dialog { 8.0 } else { 6.0f32 }).min(outer.width / 2.0).min(outer.height / 2.0);
+            let region = Rect { x: outer.x, y: outer.max_y() - radius, width: outer.width, height: 40.0 + radius };
+            surfaces.push(WindowSurface {
+                id: (client.id as isize) << 8 | (index as isize + 1),
+                frame: *outer,
+                blockers: blockers.iter().filter(|b| touches(b, &region)).copied().collect(),
+                cover: blockers.iter().filter(|b| touches(b, outer)).copied().collect(),
+                corner_radius: radius,
+                corner_exponent: 2.0,
+            });
+            blockers.push(*outer);
+        }
         blockers.push(frame);
     }
     (surfaces, covers)
+}
+
+/// Whether the panel lies wholly inside the window's frame.
+fn holds(client: &Client, p: &panels::Panel) -> bool {
+    p.x >= client.x - 2.0 && p.y >= client.y - 2.0 && p.x + p.width <= client.x + client.width + 2.0 && p.y + p.height <= client.y + client.height + 2.0
+}
+
+/// Whether the window is the front one among those holding the panels, which is the one they were read from.
+fn is_front_holder(clients: &[Client], client: &Client, inside: &[panels::Panel]) -> bool {
+    clients.iter().rev().filter(|c| !c.elsewhere).find(|c| inside.iter().any(|p| holds(c, p))).is_some_and(|c| c.id == client.id)
 }
 
 /// Whether this display is the one a window's snow lies on: where most of the window is.

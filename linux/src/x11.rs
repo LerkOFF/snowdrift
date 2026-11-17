@@ -60,6 +60,8 @@ struct Atoms {
     type_toolbar: u32,
     type_splash: u32,
     resource_manager: u32,
+    active_window: u32,
+    wm_pid: u32,
 }
 
 pub struct Display {
@@ -122,6 +124,8 @@ impl Display {
             type_toolbar: atom(&conn, "_NET_WM_WINDOW_TYPE_TOOLBAR")?,
             type_splash: atom(&conn, "_NET_WM_WINDOW_TYPE_SPLASH")?,
             resource_manager: AtomEnum::RESOURCE_MANAGER.into(),
+            active_window: atom(&conn, "_NET_ACTIVE_WINDOW")?,
+            wm_pid: atom(&conn, "_NET_WM_PID")?,
         };
         let gc = conn.generate_id()?;
         let probe = conn.generate_id()?;
@@ -175,6 +179,21 @@ impl Display {
             Some(dpi) => ((dpi / 96.0) * 4.0).round().max(4.0) / 4.0,
             None => std::env::var("GDK_SCALE").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(1.0).clamp(1.0, 4.0),
         }
+    }
+
+    /// The process of the window in front, if the window manager says.
+    pub fn active_pid(&self) -> Option<u32> {
+        let window = self.cardinals_or_windows(self.root, self.atoms.active_window).first().copied().filter(|&w| w != 0)?;
+        self.cardinals(window, self.atoms.wm_pid).first().copied()
+    }
+
+    fn cardinals_or_windows(&self, window: u32, property: u32) -> Vec<u32> {
+        self.conn
+            .get_property(false, window, property, AtomEnum::WINDOW, 0, 1)
+            .ok()
+            .and_then(|c| c.reply().ok())
+            .and_then(|r| r.value32().map(|v| v.collect()))
+            .unwrap_or_default()
     }
 
     /// The work area of the first workspace: x, y, width, height, less the panels.

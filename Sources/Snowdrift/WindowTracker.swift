@@ -527,6 +527,7 @@ final class WindowTracker {
         guard screen.width > 0 else { return [] }
         let list = Self.windowList(now: now)
         currentSpaceRead = false
+        Panels.refresh(now: now)
         raised = raised.filter { now - $0.value.at < 2 }
         learnRadii(of: list)
 
@@ -646,6 +647,33 @@ final class WindowTracker {
             if layer == 0 && !fading && id != 0 { frames[id] = frame }
             let coverOnly = coverOnlyOwners.contains(owner) && !shelf
             let kind: Surfaces = shelf ? .dock : layer < 0 ? .widgets : .windows
+            // Panels inside the window, in front of it: each catches snow on its top edge. The snow falls through the
+            // window's own edge above them, down inside the window, so that edge has a gap over each.
+            var shafts: [CGRect] = []
+            if layer == 0, !shelf, kind == .windows, collects.contains(.windows), Panels.enabled {
+                let inside = Panels.panels(of: pid, in: entry.bounds ?? bounds).sorted { $0.frame.width * $0.frame.height > $1.frame.width * $1.frame.height }
+                for (index, panel) in inside.prefix(6).enumerated() {
+                    let outer = panel.frame
+                    let panelFrame = CGRect(x: outer.minX - screen.minX, y: screen.maxY - outer.maxY, width: outer.width, height: outer.height)
+                    let room = outer.minY - screen.minY >= menuBarHeight + 6 && panelFrame.maxY < screen.height
+                    if room, panelFrame.maxX > 0, panelFrame.minX < screen.width, panelFrame.width >= 80, panelFrame.height >= 40 {
+                        shafts.append(CGRect(x: panelFrame.minX, y: panelFrame.maxY - 1, width: panelFrame.width, height: max(frame.maxY - panelFrame.maxY, 0) + 6))
+                        let radius = min(panel.kind == .dialog ? 12 : 8, panelFrame.width / 2, panelFrame.height / 2)
+                        let region = CGRect(x: panelFrame.minX, y: panelFrame.maxY - radius, width: panelFrame.width, height: 40 + radius)
+                        surfaces.append(WindowSurface(
+                            id: Panels.id(pid: pid, window: id, index: index),
+                            frame: panelFrame,
+                            blockers: blockers.filter { $0.intersects(region) },
+                            cover: blockers.filter { $0.intersects(panelFrame) },
+                            cornerRadius: radius,
+                            cornerExponent: 2.5,
+                            isDock: false,
+                            sweeps: false
+                        ))
+                    }
+                    blockers.append(panelFrame)
+                }
+            }
             if collects.contains(kind), roomAbove && onScreen && !fills && !coverOnly && !fading && bounds.width >= 80 && bounds.height >= 40, id != 0,
                shelf || !isCard(id, bounds, into: &checked) {
                 // Search bars like Spotlight are capsules: low and wide, with fully rounded ends.
@@ -659,7 +687,7 @@ final class WindowTracker {
                 surfaces.append(WindowSurface(
                     id: id,
                     frame: frame,
-                    blockers: blockers.filter { $0.intersects(region) },
+                    blockers: blockers.filter { $0.intersects(region) } + shafts,
                     cover: blockers.filter { $0.intersects(frame) },
                     cornerRadius: radius,
                     cornerExponent: capsule ? 2 : 2.5,

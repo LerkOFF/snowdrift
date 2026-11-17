@@ -115,6 +115,13 @@ struct Marquee {
 /// A surface id no window has: the rubber band's.
 const MARQUEE: isize = isize::MIN + 1;
 
+/// Where the ids of panels inside windows start, far from any window's and the rubber band's.
+const PANEL_BASE: isize = isize::MIN + (1 << 40);
+
+fn panel_id(window: isize, index: usize) -> isize {
+    PANEL_BASE.wrapping_add(((window as usize & 0xFFFF_FFFF) << 8 | index.min(255)) as isize)
+}
+
 /// The windows on screen, front to back, re-read when the system reports a window moving, showing, hiding,
 /// minimizing or changing desktops, and twice a second in case a report went missing.
 pub struct Tracker {
@@ -178,7 +185,8 @@ impl Tracker {
     /// Re-reads the window list if anything may have changed; returns whether it did.
     pub fn refresh(&mut self, clock: &Clock, now: i64) -> bool {
         let events = EVENTS.get();
-        let due = events.changed || clock.seconds(now - self.listed_at) >= 0.5;
+        let panels_changed = crate::panels::take_changed();
+        let due = events.changed || panels_changed || clock.seconds(now - self.listed_at) >= 0.5;
         if !due && !self.animating {
             return false;
         }
@@ -328,13 +336,38 @@ impl Tracker {
             let room_above = ((r.top - area.top) as f32 * sy >= 6.0 && frame.max_y() < height) || self.below_display(name, r, sy);
             let on_screen = frame.max_x() > 0.0 && frame.min_x() < width && frame.max_y() > 0.0;
             let here = self.owners.get(&window.id).is_none_or(|owner| owner == name);
+            // Panels inside the window, in front of it: each catches snow on its top edge. The snow falls through the
+            // window's own edge above them, down inside the window, so that edge has a gap over each.
+            let mut shafts: Vec<Rect> = Vec::new();
+            if here && on_screen && !fills_screen && !window.cover_only {
+                for (index, panel) in crate::panels::of(window.id, r).iter().enumerate() {
+                    let outer = frame_in(&panel.rect, area, size);
+                    let room = ((panel.rect.top - area.top) as f32 * sy >= 6.0 && outer.max_y() < height) || self.below_display(name, &panel.rect, sy);
+                    if room && outer.max_x() > 0.0 && outer.min_x() < width && outer.width >= 80.0 && outer.height >= 40.0 {
+                        shafts.push(Rect { x: outer.x, y: outer.max_y() - 1.0, width: outer.width, height: (frame.max_y() - outer.max_y()).max(0.0) + 6.0 });
+                        let radius = if panel.kind == crate::panels::Kind::Dialog { 8.0f32 } else { 6.0 }.min(outer.width / 2.0).min(outer.height / 2.0);
+                        let region = Rect { x: outer.x, y: outer.max_y() - radius, width: outer.width, height: 40.0 + radius };
+                        surfaces.push(WindowSurface {
+                            id: panel_id(window.id, index),
+                            frame: outer,
+                            blockers: blockers.iter().filter(|b| intersects(b, &region)).copied().collect(),
+                            cover: blockers.iter().filter(|b| intersects(b, &outer)).copied().collect(),
+                            corner_radius: radius,
+                            corner_exponent: 2.0,
+                        });
+                    }
+                    blockers.push(outer);
+                }
+            }
             if here && room_above && on_screen && !fills_screen && !window.cover_only && frame.width >= 80.0 && frame.height >= 40.0 {
                 let radius = window.radius.min(frame.width / 2.0).min(frame.height / 2.0);
                 let region = Rect { x: frame.x, y: frame.max_y() - radius, width: frame.width, height: 40.0 + radius };
+                let mut hiding: Vec<Rect> = blockers.iter().filter(|b| intersects(b, &region)).copied().collect();
+                hiding.extend(shafts);
                 surfaces.push(WindowSurface {
                     id: window.id,
                     frame,
-                    blockers: blockers.iter().filter(|b| intersects(b, &region)).copied().collect(),
+                    blockers: hiding,
                     cover: blockers.iter().filter(|b| intersects(b, &frame)).copied().collect(),
                     corner_radius: radius,
                     corner_exponent: 2.0,

@@ -54,6 +54,8 @@ pub enum Command {
     ShowInScreenshots(bool),
     /// The snow settles on a selection dragged across the desktop too.
     DeepInteraction(bool),
+    /// The snow settles on dialogs and big pictures inside windows too.
+    Panels(bool),
     /// Off while the screen is locked, asleep or the session is away.
     Active(bool),
     Scatter(Vec<Piece>),
@@ -128,6 +130,7 @@ fn run_loop(commands: &Receiver<Command>, links: &Links, mut settings: Settings)
     let mut desktop_logged = String::new();
     let mut stats = Stats::new(started);
     let mut tracker = Tracker::new();
+    crate::panels::set_enabled(settings.panels && settings.snow_on_windows);
     // The display each window's snow lies on, as of the last window list.
     let mut owners = HashMap::new();
     watch_taskbar(links.wake);
@@ -163,6 +166,7 @@ fn run_loop(commands: &Receiver<Command>, links: &Links, mut settings: Settings)
                 }
                 Command::SnowOnWindows(on) => {
                     settings.snow_on_windows = on;
+                    crate::panels::set_enabled(on && settings.panels);
                     let accumulates = settings.accumulates();
                     screens.iter_mut().for_each(|screen| screen.simulation.accumulates = accumulates);
                     if !on {
@@ -188,6 +192,10 @@ fn run_loop(commands: &Receiver<Command>, links: &Links, mut settings: Settings)
                     if !on {
                         tracker.drop_marquee();
                     }
+                }
+                Command::Panels(on) => {
+                    settings.panels = on;
+                    crate::panels::set_enabled(on && settings.snow_on_windows);
                 }
                 Command::Performance(max) => {
                     settings.max_performance = max;

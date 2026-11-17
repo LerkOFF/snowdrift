@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var fullScreenItem: NSMenuItem!
     private var screenshotsItem: NSMenuItem!
     private var deepInteractionItem: NSMenuItem!
+    private var panelsItem: NSMenuItem!
     private var loginItem: NSMenuItem!
     private var observers: [NSObjectProtocol] = []
     private var screensAsleep = false
@@ -70,6 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         halloweenTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.refreshHalloween() }
         observeSystem()
         Marquee.enabled = Preferences.deepInteraction
+        Panels.enabled = Preferences.panels
         screenshots.stepAside = { [weak self] aside in self?.screens.forEach { $0.stepAside(aside) } }
         screenshots.start()
         if snowfallHeld {
@@ -195,6 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settings.addItem(.sectionHeader(title: tr("behavior")))
         meltItem = toggle(tr("melt.snow"), #selector(toggleMeltSnow), to: settings)
         deepInteractionItem = toggle(tr("deep"), #selector(toggleDeepInteraction), to: settings)
+        panelsItem = toggle(tr("panels"), #selector(togglePanels), to: settings)
         settings.addItem(.separator())
         settings.addItem(.sectionHeader(title: tr("display")))
         behindWindowsItem = toggle(tr("behind"), #selector(toggleBehindWindows), to: settings)
@@ -256,6 +259,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         meltItem.isEnabled = !surfaces.isEmpty
         deepInteractionItem.state = Preferences.deepInteraction ? .on : .off
         deepInteractionItem.isEnabled = surfaces.contains(.windows)
+        panelsItem.state = Preferences.panels ? .on : .off
+        panelsItem.isEnabled = surfaces.contains(.windows)
         clearItem.isEnabled = screens.contains { $0.simulation.hasSnow || $0.simulation.spriteCount > 0 }
         halloweenItem.state = Halloween.isWanted ? .on : .off
         halloweenItem.isEnabled = modes == [.snow]
@@ -296,6 +301,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleDeepInteraction() {
         Preferences.deepInteraction.toggle()
         Marquee.enabled = Preferences.deepInteraction
+    }
+
+    @objc private func togglePanels() {
+        Preferences.panels.toggle()
+        Panels.enabled = Preferences.panels
     }
 
     @objc private func callPlow() {

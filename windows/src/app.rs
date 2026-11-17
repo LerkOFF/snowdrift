@@ -63,6 +63,7 @@ const ID_BLOSSOM: u32 = 217;
 const ID_MIXED: u32 = 219;
 const ID_GROUND: u32 = 220;
 const ID_OPACITY_FOLD: u32 = 221;
+const ID_PANELS: u32 = 222;
 /// Opacity from 10% up in steps of 5%: `ID_OPACITY` + the step.
 const ID_OPACITY: u32 = 400;
 const OPACITY_STEPS: u32 = 19;
@@ -410,6 +411,7 @@ fn entries(settings: &Settings, login: bool, sliders: bool) -> Vec<Entry> {
     let mut options = behavior;
     options.extend([
         Entry::toggle(ID_DEEP, tr("deep"), settings.deep_interaction, settings.snow_on_windows),
+        Entry::toggle(ID_PANELS, tr("panels"), settings.panels, settings.snow_on_windows),
         Entry::Separator,
         Entry::header(tr("display")),
         Entry::toggle(ID_BEHIND, tr("behind"), settings.behind_windows, true),
@@ -631,6 +633,10 @@ fn choose(window: HWND, chosen: u32, login: bool) {
                 ID_DEEP => {
                     settings.deep_interaction = !settings.deep_interaction;
                     Command::DeepInteraction(settings.deep_interaction)
+                }
+                ID_PANELS => {
+                    settings.panels = !settings.panels;
+                    Command::Panels(settings.panels)
                 }
                 ID_MAX_PERFORMANCE => {
                     settings.max_performance = !settings.max_performance;

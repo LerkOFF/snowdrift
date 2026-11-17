@@ -23,6 +23,7 @@
 "melt.autumn" = "葉を枯らす";
 "melt.blossom" = "花びらを枯らす";
 "deep" = "ディープインタラクション";
+"panels" = "パネルにも雪を積もらせる";
 "behind" = "ウインドウの後ろ";
 "full_screen" = "フルスクリーンの上に表示";
 "taskbar" = "タスクバーの後ろ";

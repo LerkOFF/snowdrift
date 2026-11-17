@@ -30,6 +30,7 @@ enum Preferences {
     private static let installedAtKey = "installedAt"
     private static let showInScreenshotsKey = "showInScreenshots"
     private static let deepInteractionKey = "deepInteraction"
+    private static let panelsKey = "snowOnPanels"
     private static let halloweenKey = "halloweenOn"
     private static let halloweenSkippedKey = "halloweenSkipped"
     private static let modeKey = "mode"
@@ -59,6 +60,7 @@ enum Preferences {
             snowOnWindowsKey: true,
             showInScreenshotsKey: false,
             deepInteractionKey: false,
+            panelsKey: false,
             halloweenKey: false,
             halloweenSkippedKey: 0,
             autumnKey: false,
@@ -131,6 +133,12 @@ enum Preferences {
     }
 
     /// The snow also settles on what the desktop draws without a window of its own: a selection dragged across it.
+    /// Snow settles on panels inside windows too, read through Accessibility.
+    static var panels: Bool {
+        get { defaults.bool(forKey: panelsKey) }
+        set { defaults.set(newValue, forKey: panelsKey) }
+    }
+
     static var deepInteraction: Bool {
         get { defaults.bool(forKey: deepInteractionKey) }
         set { defaults.set(newValue, forKey: deepInteractionKey) }
