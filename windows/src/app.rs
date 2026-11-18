@@ -248,8 +248,11 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wparam: WPARAM, 
                 let x = (wparam.0 & 0xffff) as i16 as i32;
                 let y = ((wparam.0 >> 16) & 0xffff) as i16 as i32;
                 show_menu(window, x, y);
-            } else if event == NIN_BALLOONUSERCLICK && APP.with_borrow(|app| app.as_ref().is_some_and(|app| app.update.is_some())) {
-                update::open(update::STORE);
+            } else if event == NIN_BALLOONUSERCLICK {
+                let pending = APP.with_borrow(|app| app.as_ref().and_then(|app| app.update.clone()));
+                if let Some(version) = pending {
+                    install_update(Release { version });
+                }
             }
             LRESULT(0)
         }
@@ -677,6 +680,17 @@ fn check_for_updates(window: HWND, asked: bool) {
     });
 }
 
+/// Downloads and installs on another thread; the installer closes this copy and starts the new one.
+fn install_update(release: Release) {
+    thread::spawn(move || {
+        if let Err(error) = update::install(&release) {
+            log!("update install failed: {error}");
+            let text: Vec<u16> = format!("{}\n\n{error}", tr("update.install.failed")).encode_utf16().chain([0]).collect();
+            unsafe { MessageBoxW(None, PCWSTR(text.as_ptr()), w!("Snowdrift"), MB_OK | MB_ICONWARNING | MB_SETFOREGROUND | MB_TOPMOST) };
+        }
+    });
+}
+
 /// A check someone asked for always answers; the daily one only speaks up, once, about a new version.
 fn updated(window: HWND, result: std::result::Result<Option<Release>, String>, asked: bool) {
     let current = env!("CARGO_PKG_VERSION");
@@ -684,7 +698,7 @@ fn updated(window: HWND, result: std::result::Result<Option<Release>, String>, a
         Ok(Some(release)) if asked => {
             let text = text::fill("update.ask", &[("version", &release.version), ("current", current)]);
             if message(window, &text, MB_YESNO | MB_ICONINFORMATION) == IDYES {
-                update::open(update::STORE);
+                install_update(release);
             }
         }
         Ok(Some(release)) => {

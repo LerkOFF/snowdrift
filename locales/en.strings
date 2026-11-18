@@ -52,12 +52,14 @@
 "welcome.title" = "Snow on your desktop";
 "welcome.start" = "Get Started";
 
-/* Windows' own update check. */
-"update.ask" = "Snowdrift {version} is available. You have {current}.\n\nDownload it now?";
+/* Checking for updates and installing them, on macOS and Windows. */
+"update.ask" = "Snowdrift {version} is available. You have {current}.\n\nDownload and install it now?";
 "update.available" = "Snowdrift {version} is available";
-"update.click" = "Click to download it.";
+"update.click" = "Click to update it.";
 "update.latest" = "You're up to date.\n\nSnowdrift {current} is the latest version.";
 "update.failed" = "Couldn't check for updates.";
+"update.later" = "Later";
+"update.install.failed" = "Couldn't install the update.";
 "shortcut" = "Snow on your desktop";
 
 /* Windows' installer card; its title and buttons are shown in capitals. */

@@ -46,11 +46,13 @@
 "welcome.title" = "Neve na sua área de trabalho";
 "welcome.start" = "Começar";
 
-"update.ask" = "O Snowdrift {version} está disponível. Você tem a {current}.\n\nBaixar agora?";
+"update.ask" = "O Snowdrift {version} está disponível. Você tem a {current}.\n\nBaixar e instalar agora?";
 "update.available" = "Snowdrift {version} disponível";
-"update.click" = "Clique para baixar.";
+"update.click" = "Clique para atualizar.";
 "update.latest" = "Tudo atualizado.\n\nO Snowdrift {current} é a versão mais recente.";
 "update.failed" = "Não foi possível procurar atualizações.";
+"update.later" = "Mais tarde";
+"update.install.failed" = "Não foi possível instalar a atualização.";
 "shortcut" = "Neve na sua área de trabalho";
 
 "setup.fresh" = "Versão {version}. Instala só para você, sem permissões de administrador.";

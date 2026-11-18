@@ -146,7 +146,10 @@ snowdrift plow             # вызвать снегоуборщик
 snowdrift clear            # сдуть снег
 snowdrift set intensity 70 # 0-100; ещё opacity, ground, melt, windows, fullscreen, panels, mode snow|autumn|rain|blossom, mixed
 snowdrift autostart on     # запускать при входе
+snowdrift update           # проверить обновления, скачать, заменить и перезапустить
 ```
+
+Обновление: на macOS и Windows пункт меню «Проверить обновления…» сам скачивает новую версию, заменяет приложение и запускает его заново (Windows ещё и раз в сутки сообщает о выходе новой версии). Настройки сохраняются.
 
 Настройки лежат в `~/.config/snowdrift/config`. Удалить: `snowdrift uninstall` или `install.sh --uninstall`.
 

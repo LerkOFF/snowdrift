@@ -6,6 +6,7 @@ mod control;
 mod install;
 mod panels;
 mod render;
+mod update;
 mod x11;
 
 use std::collections::{HashMap, HashSet};
@@ -35,6 +36,7 @@ Usage: snowdrift [command]
                          windows on|off, fullscreen on|off, panels on|off, mode snow|autumn|rain|blossom, mixed on|off
   status                 what is running and how it is set
   autostart on|off       start at login
+  update                 check for a newer version, download it, replace this one and restart
   install                put the program, launcher entry and icon in your home folder
   uninstall              take them out again
   --version              the version";
@@ -51,6 +53,13 @@ fn main() {
         ["status"] => status(),
         ["set", name, value] => ask(&format!("set {name} {value}")),
         ["autostart", on @ ("on" | "off")] => report(install::autostart(on == "on")),
+        ["update"] => match update::update(VERSION) {
+            Ok(text) => {
+                println!("{text}");
+                0
+            }
+            Err(error) => fail(&error),
+        },
         ["install"] => match install::install() {
             Ok(path) => {
                 println!("Installed to {}. Find Snowdrift in the application menu, or run `snowdrift start`.", path.display());

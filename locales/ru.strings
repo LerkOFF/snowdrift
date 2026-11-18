@@ -46,11 +46,13 @@
 "welcome.title" = "Снег на вашем рабочем столе";
 "welcome.start" = "Начать";
 
-"update.ask" = "Доступен Snowdrift {version}. У вас {current}.\n\nСкачать сейчас?";
+"update.ask" = "Доступен Snowdrift {version}. У вас {current}.\n\nСкачать и установить сейчас?";
 "update.available" = "Доступен Snowdrift {version}";
-"update.click" = "Нажмите, чтобы скачать.";
+"update.click" = "Нажмите, чтобы обновить.";
 "update.latest" = "У вас последняя версия.\n\nSnowdrift {current} — самая новая.";
 "update.failed" = "Не удалось проверить обновления.";
+"update.later" = "Позже";
+"update.install.failed" = "Не удалось установить обновление.";
 "shortcut" = "Снег на рабочем столе";
 
 "setup.fresh" = "Версия {version}. Устанавливается только для вас, без прав администратора.";

@@ -46,11 +46,13 @@
 "welcome.title" = "桌面上下起了雪";
 "welcome.start" = "开始";
 
-"update.ask" = "Snowdrift {version} 现已推出。你当前的版本是 {current}。\n\n现在下载吗？";
+"update.ask" = "Snowdrift {version} 现已推出。你当前的版本是 {current}。\n\n现在下载并安装吗？";
 "update.available" = "Snowdrift {version} 现已推出";
-"update.click" = "点击即可下载。";
+"update.click" = "点击即可更新。";
 "update.latest" = "已是最新版本。\n\nSnowdrift {current} 是最新版本。";
 "update.failed" = "无法检查更新。";
+"update.later" = "稍后";
+"update.install.failed" = "无法安装更新。";
 "shortcut" = "桌面上的雪";
 
 "setup.fresh" = "版本 {version}。仅为你安装，无需管理员权限。";

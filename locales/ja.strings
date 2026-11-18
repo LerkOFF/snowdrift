@@ -46,11 +46,13 @@
 "welcome.title" = "デスクトップに雪が降る";
 "welcome.start" = "はじめる";
 
-"update.ask" = "Snowdrift {version}が利用可能です。現在のバージョンは{current}です。\n\n今すぐダウンロードしますか？";
+"update.ask" = "Snowdrift {version}が利用可能です。現在のバージョンは{current}です。\n\n今すぐダウンロードしてインストールしますか？";
 "update.available" = "Snowdrift {version}が利用可能です";
-"update.click" = "クリックしてダウンロード。";
+"update.click" = "クリックしてアップデート。";
 "update.latest" = "最新の状態です。\n\nSnowdrift {current}が最新バージョンです。";
 "update.failed" = "アップデートを確認できませんでした。";
+"update.later" = "あとで";
+"update.install.failed" = "アップデートをインストールできませんでした。";
 "shortcut" = "デスクトップに降る雪";
 
 "setup.fresh" = "バージョン{version}。管理者権限なしで、あなただけにインストールします。";

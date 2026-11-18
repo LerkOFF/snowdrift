@@ -207,7 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settings.addItem(.separator())
         settings.addItem(.sectionHeader(title: tr("general")))
         loginItem = toggle(tr("login"), #selector(toggleOpenAtLogin), to: settings)
-        add(tr("updates"), #selector(openReleases), to: settings)
+        add(tr("updates"), #selector(checkForUpdates), to: settings)
         menu.addItem(withTitle: tr("settings"), action: nil, keyEquivalent: "").submenu = settings
         menu.addItem(withTitle: tr("quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
@@ -337,8 +337,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    @objc private func openReleases() {
-        NSWorkspace.shared.open(URL(string: "https://github.com/LerkOFF/snowdrift/releases/latest")!)
+    @objc private func checkForUpdates() {
+        MainActor.assumeIsolated { Updater.check() }
     }
 
     @objc private func toggleOpenAtLogin() {

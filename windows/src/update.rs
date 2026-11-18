@@ -1,20 +1,18 @@
 use std::ffi::c_void;
+use std::os::windows::process::CommandExt;
 
 use windows::Win32::Networking::WinHttp::{
     WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_FLAG_SECURE, WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_STATUS_CODE, WinHttpCloseHandle,
     WinHttpConnect, WinHttpOpen, WinHttpOpenRequest, WinHttpQueryHeaders, WinHttpReadData, WinHttpReceiveResponse, WinHttpSendRequest,
     WinHttpSetTimeouts,
 };
-use windows::Win32::UI::Shell::ShellExecuteW;
-use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 use windows::core::{PCWSTR, w};
 
 use snowdrift_core::version::{field, newer};
 
 const REPOSITORY: &str = "LerkOFF/snowdrift";
 const INSTALLER: &str = "Snowdrift.exe";
-/// Where updates come from: the latest release page.
-pub const STORE: &str = "https://github.com/LerkOFF/snowdrift/releases/latest";
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// A release newer than this build that carries an installer for Windows.
 pub struct Release {
@@ -23,7 +21,7 @@ pub struct Release {
 
 /// Asks GitHub for the latest release. Releases with nothing for Windows don't count as updates.
 pub fn check() -> Result<Option<Release>, String> {
-    let body = fetch(&format!("/repos/{REPOSITORY}/releases/latest"))?;
+    let body = String::from_utf8_lossy(&fetch("api.github.com", &format!("/repos/{REPOSITORY}/releases/latest"))?).into_owned();
     let tag = field(&body, "tag_name").ok_or("the latest release has no tag")?;
     let version = tag.trim_start_matches('v');
     if !body.contains(&format!("\"{INSTALLER}\"")) || !newer(version, env!("CARGO_PKG_VERSION")) {
@@ -32,11 +30,22 @@ pub fn check() -> Result<Option<Release>, String> {
     Ok(Some(Release { version: version.to_string() }))
 }
 
-pub fn open(url: &str) {
-    let url: Vec<u16> = url.encode_utf16().chain([0]).collect();
-    unsafe {
-        ShellExecuteW(None, w!("open"), PCWSTR(url.as_ptr()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
+/// Downloads the installer of `release` and starts it: it closes this copy, replaces it and starts the new one.
+pub fn install(release: &Release) -> Result<(), String> {
+    let bytes = fetch("github.com", &format!("/{REPOSITORY}/releases/download/v{}/{INSTALLER}", release.version))?;
+    if bytes.len() < 100_000 || !bytes.starts_with(b"MZ") {
+        return Err("the download isn't a Windows program".to_string());
     }
+    let folder = std::env::temp_dir().join("Snowdrift-update");
+    std::fs::create_dir_all(&folder).map_err(|error| format!("couldn't create {}: {error}", folder.display()))?;
+    let exe = folder.join(INSTALLER);
+    std::fs::write(&exe, bytes).map_err(|error| format!("couldn't write {}: {error}", exe.display()))?;
+    std::process::Command::new(&exe)
+        .arg("--install")
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|error| format!("couldn't start the installer: {error}"))?;
+    Ok(())
 }
 
 struct Handle(*mut c_void);
@@ -51,16 +60,17 @@ impl Drop for Handle {
     }
 }
 
-fn fetch(path: &str) -> Result<String, String> {
+fn fetch(host: &str, path: &str) -> Result<Vec<u8>, String> {
     let failed = |what: &str| format!("{what} failed: {}", windows::core::Error::from_thread().message());
     let path: Vec<u16> = path.encode_utf16().chain([0]).collect();
+    let host: Vec<u16> = host.encode_utf16().chain([0]).collect();
     unsafe {
         let session = Handle(WinHttpOpen(w!("Snowdrift"), WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, PCWSTR::null(), PCWSTR::null(), 0));
         if session.0.is_null() {
             return Err(failed("Opening a connection"));
         }
-        let _ = WinHttpSetTimeouts(session.0, 10_000, 10_000, 10_000, 10_000);
-        let connection = Handle(WinHttpConnect(session.0, w!("api.github.com"), 443, 0));
+        let _ = WinHttpSetTimeouts(session.0, 10_000, 10_000, 10_000, 60_000);
+        let connection = Handle(WinHttpConnect(session.0, PCWSTR(host.as_ptr()), 443, 0));
         if connection.0.is_null() {
             return Err(failed("Connecting to GitHub"));
         }
@@ -105,6 +115,6 @@ fn fetch(path: &str) -> Result<String, String> {
             }
             body.extend_from_slice(&buffer[..read as usize]);
         }
-        Ok(String::from_utf8_lossy(&body).into_owned())
+        Ok(body)
     }
 }

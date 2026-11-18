@@ -46,11 +46,13 @@
 "welcome.title" = "De la neige sur ton bureau";
 "welcome.start" = "Commencer";
 
-"update.ask" = "Snowdrift {version} est disponible. Vous avez la version {current}.\n\nLa télécharger maintenant ?";
+"update.ask" = "Snowdrift {version} est disponible. Vous avez la version {current}.\n\nLa télécharger et l'installer maintenant ?";
 "update.available" = "Snowdrift {version} est disponible";
-"update.click" = "Cliquez pour la télécharger.";
+"update.click" = "Cliquez pour la mettre à jour.";
 "update.latest" = "Vous êtes à jour.\n\nSnowdrift {current} est la dernière version.";
 "update.failed" = "Impossible de rechercher les mises à jour.";
+"update.later" = "Plus tard";
+"update.install.failed" = "Impossible d'installer la mise à jour.";
 "shortcut" = "De la neige sur votre bureau";
 
 "setup.fresh" = "Version {version}. S'installe pour vous seul, sans droits d'administrateur.";

@@ -46,11 +46,13 @@
 "welcome.title" = "Schnee auf deinem Desktop";
 "welcome.start" = "Los geht's";
 
-"update.ask" = "Snowdrift {version} ist verfügbar. Du hast {current}.\n\nJetzt herunterladen?";
+"update.ask" = "Snowdrift {version} ist verfügbar. Du hast {current}.\n\nJetzt herunterladen und installieren?";
 "update.available" = "Snowdrift {version} ist verfügbar";
-"update.click" = "Zum Herunterladen klicken.";
+"update.click" = "Zum Aktualisieren klicken.";
 "update.latest" = "Alles aktuell.\n\nSnowdrift {current} ist die neueste Version.";
 "update.failed" = "Die Suche nach Updates ist fehlgeschlagen.";
+"update.later" = "Später";
+"update.install.failed" = "Das Update konnte nicht installiert werden.";
 "shortcut" = "Schnee auf deinem Desktop";
 
 "setup.fresh" = "Version {version}. Wird nur für dich installiert, ohne Administratorrechte.";
