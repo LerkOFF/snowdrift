@@ -4,6 +4,7 @@ use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use std::hash::{BuildHasher, Hasher};
 use std::ops::Range;
 
+use crate::festive::{Frost, GarlandSprite, Probe, Snowmen, Terrain};
 use crate::geometry::{Rect, V2, smoothstep};
 use crate::layer::{Blend, SnowLayer};
 
@@ -494,6 +495,14 @@ pub struct SnowSimulation {
     plow_check_at: f64,
     /// Whether the plow comes out by itself once the ground snow gets deep; the app turns it on.
     pub auto_plow: bool,
+    /// A string of lights along the top of every window.
+    pub garland: bool,
+    /// Snow settles on windows; if not, the windows carry decorations only.
+    pub window_snow: bool,
+    /// The primary mouse button is down.
+    pub pointer_down: bool,
+    pub snowmen: Snowmen,
+    pub frost: Frost,
 }
 
 impl SnowSimulation {
@@ -539,6 +548,11 @@ impl SnowSimulation {
             plow: None,
             plow_check_at: 0.0,
             auto_plow: false,
+            garland: false,
+            window_snow: true,
+            pointer_down: false,
+            snowmen: Snowmen::default(),
+            frost: Frost::default(),
             air: Air {
                 flakes: Vec::new(),
                 grains: Vec::new(),
@@ -562,6 +576,7 @@ impl SnowSimulation {
                 jolt_scale: jolt_scale(height),
             },
         };
+        simulation.frost.resize(width, height);
         simulation.update_target();
         simulation
     }
@@ -716,6 +731,17 @@ impl SnowSimulation {
             && self.parking.is_empty()
             && self.next_mode.is_none()
             && self.layers.iter().all(|layer| layer.top <= 0.0)
+            && !self.decorates()
+    }
+
+    /// Decorations that change on their own: lights twinkling, snowmen being handled.
+    pub fn decor_animates(&self) -> bool {
+        self.garland && self.layers.len() > 1 || !self.snowmen.is_empty()
+    }
+
+    /// Anything of the winter decorations that moves or must be drawn on its own.
+    pub fn decorates(&self) -> bool {
+        self.garland && self.layers.len() > 1 || !self.snowmen.is_empty() || self.frost.active()
     }
 
     pub fn sprite_count(&self) -> usize {
@@ -743,6 +769,7 @@ impl SnowSimulation {
             return;
         }
         self.layers[0].resize(column_count(width));
+        self.frost.resize(width, height);
         self.width = width;
         self.height = height;
         self.air.jolt_scale = jolt_scale(height);
@@ -837,9 +864,20 @@ impl SnowSimulation {
             self.air.carry(ledge, dt);
         }
         self.forget_buried_snow(dt);
-        self.track_cursor(cursor, dt);
+        let festive = self.step_festive(dt, cursor);
+        if self.snowmen.wants_pointer {
+            // The pointer is on a ball or the snow it rolls up: the snow is for the ball, not to be swept aside.
+            for li in self.air.held_layers.drain(..) {
+                self.layers[li].release_support();
+            }
+            self.air.cursor = None;
+        } else {
+            self.track_cursor(cursor, dt);
+        }
         self.advance_plow(dt);
-        self.pointer_low(dt);
+        if !self.snowmen.wants_pointer {
+            self.pointer_low(dt);
+        }
         for (li, ledge) in self.layers.iter_mut().enumerate().skip(1) {
             self.air.confine(ledge, li, self.width, self.walls);
         }
@@ -880,7 +918,8 @@ impl SnowSimulation {
         let pushed = air.clock - air.last_window_motion < 0.6
             || air.clock - air.last_cursor_push < 0.3
             || air.gust.is_some()
-            || self.haunting.pushing(air.clock);
+            || self.haunting.pushing(air.clock)
+            || air.clock - self.snowmen.moved_at < 0.4;
         // The steady trickle off window corners is a few tiny grains at a time; they read fine at the calm rate.
         let flying = air.grains.len() > 24 || air.clock < self.scattered_until || air.slide_wind.abs() > 20.0;
         self.pace = if pushed {
@@ -898,7 +937,8 @@ impl SnowSimulation {
             || self.air.windows_changed
             || self.lanterns.moved
             || self.restyled
-            || self.borrowed_changed;
+            || self.borrowed_changed
+            || festive;
         self.restyled = false;
         self.air.windows_changed = false;
         self.borrowed_changed = false;
@@ -1185,6 +1225,7 @@ impl SnowSimulation {
             let blockers: Vec<[f32; 4]> = surface.blockers.iter().map(|b| [b.min_x(), b.min_y(), b.max_x(), b.max_y()]).collect();
             ledge.occluders = blockers.iter().take(16).copied().collect();
             ledge.face = surface.frame.height;
+            ledge.decor_only = !self.window_snow && Some(surface.id) != self.shelf;
             ledge.face_occluders = surface.cover.iter().take(16).map(|b| [b.min_x(), b.min_y(), b.max_x(), b.max_y()]).collect();
             ledge.update_visibility(seen, &blockers);
         }
@@ -1260,6 +1301,78 @@ impl SnowSimulation {
 
     // Snowplow and the pointer over the taskbar (Snowdrift)
 
+
+    // MARK: Festive
+
+    fn step_festive(&mut self, dt: f32, cursor: V2) -> bool {
+        let pointer = (cursor.x > -9000.0).then_some(cursor);
+        let clock = self.air.clock;
+        let down = self.pointer_down;
+        let mut snowmen = std::mem::take(&mut self.snowmen);
+        let mut changed = snowmen.update(dt, pointer, down, &mut TerrainView(self), clock);
+        self.snowmen = snowmen;
+        if self.frost.step(dt, pointer, clock) {
+            changed = true;
+        }
+        changed
+    }
+
+    fn smash_snowmen(&mut self, from: f32, to: f32) {
+        let mut snowmen = std::mem::take(&mut self.snowmen);
+        snowmen.smash(from, to, &mut TerrainView(self));
+        self.snowmen = snowmen;
+    }
+
+    /// Bursts every snowman and ball, as a click on the menu does.
+    pub fn clear_snowmen(&mut self) {
+        let mut snowmen = std::mem::take(&mut self.snowmen);
+        snowmen.smash_all(&mut TerrainView(self));
+        self.snowmen = snowmen;
+    }
+
+    /// What carries a ball at x: the shelf's top while it is under it and higher than the ground, else the ground.
+    fn support_layer(&self, x: f32) -> usize {
+        if self.accumulates
+            && let Some(shelf) = self.shelf
+            && let Some(li) = self.ids.iter().position(|&id| id == shelf)
+            && li != 0
+        {
+            let layer = &self.layers[li];
+            if let Some(i) = layer.index(x)
+                && layer.visible[i]
+                && layer.surface(i) >= self.layers[0].surface(self.layers[0].clamped_index(x))
+            {
+                return li;
+            }
+        }
+        0
+    }
+
+    /// The window edges the garlands hang from.
+    pub fn garlands(&self) -> Vec<GarlandSprite> {
+        if !self.garland {
+            return Vec::new();
+        }
+        let mut result = Vec::new();
+        for (li, layer) in self.layers.iter().enumerate().skip(1) {
+            let id = self.ids[li];
+            if Some(id) == self.shelf || layer.width() < 110.0 {
+                continue;
+            }
+            result.push(GarlandSprite { anchor: layer.origin, width: layer.width(), seed: id.rem_euclid(997) as f32 / 997.0, covers: layer.face_occluders.clone() });
+        }
+        result
+    }
+
+    pub fn clock(&self) -> f64 {
+        self.air.clock
+    }
+
+    /// Where a ball of snow rests at x.
+    pub fn snow_surface(&self, x: f32) -> f32 {
+        TerrainViewRef(self).probe(x).surface
+    }
+
     pub fn plow(&self) -> Option<PlowState> {
         self.plow
     }
@@ -1290,6 +1403,9 @@ impl SnowSimulation {
         self.air.last_cursor_push = self.air.clock;
         let previous = p.tip;
         p.tip += p.dir * PLOW_SPEED * dt;
+        if !self.snowmen.is_empty() {
+            self.smash_snowmen(previous - p.dir * 14.0, p.tip + p.dir * 14.0);
+        }
         let from = previous.min(p.tip).max(0.0);
         let to = previous.max(p.tip).min(self.width);
         let mut scraped = Gathered::default();
@@ -2251,6 +2367,78 @@ impl SnowSimulation {
         self.air.last_window_motion = self.air.clock;
         self.air.windows_changed = true;
         self.air.heights_changed = true;
+    }
+}
+
+/// The snow under the balls, for reading only.
+struct TerrainViewRef<'a>(&'a SnowSimulation);
+
+impl TerrainViewRef<'_> {
+    fn probe(&self, x: f32) -> Probe {
+        let li = self.0.support_layer(x);
+        let layer = &self.0.layers[li];
+        let i = layer.clamped_index(x);
+        Probe { surface: layer.surface(i), depth: layer.heights[i], below: if li == 0 { 14.0 } else { 2.0 } }
+    }
+}
+
+/// The snow under the balls of snow, as the snowmen see it.
+struct TerrainView<'a>(&'a mut SnowSimulation);
+
+impl Terrain for TerrainView<'_> {
+    fn width(&self) -> f32 {
+        self.0.width
+    }
+
+    fn probe(&self, x: f32) -> Probe {
+        let li = self.0.support_layer(x);
+        let layer = &self.0.layers[li];
+        let i = layer.clamped_index(x);
+        Probe { surface: layer.surface(i), depth: layer.heights[i], below: if li == 0 { 14.0 } else { 2.0 } }
+    }
+
+    fn take(&mut self, x: f32, half: f32, share: f32) -> f32 {
+        let li = self.0.support_layer(x);
+        let layer = &mut self.0.layers[li];
+        let base = layer.base().x;
+        let lower = (((x - half - base) / COLUMN_WIDTH).floor().max(0.0)) as usize;
+        let upper = ((((x + half - base) / COLUMN_WIDTH).floor()).max(0.0) as usize).min(layer.count().saturating_sub(1));
+        if lower > upper {
+            return 0.0;
+        }
+        let mut area = 0.0;
+        for i in lower..=upper {
+            if !layer.visible[i] {
+                continue;
+            }
+            let h = layer.heights[i];
+            if h <= 0.001 {
+                continue;
+            }
+            let taken = h * share;
+            layer.set(i, h - taken);
+            area += taken * COLUMN_WIDTH;
+        }
+        if area > 0.0 {
+            self.0.air.heights_changed = true;
+            self.0.air.last_cursor_push = self.0.air.clock;
+        }
+        area
+    }
+
+    /// A ball of snow bursting: its snow goes up in clumps and a puff of powder, and settles again.
+    fn burst(&mut self, area: f32, at: V2, velocity: V2) {
+        let chunks = ((area / 40.0) as usize).clamp(1, 28);
+        let air = &mut self.0.air;
+        for _ in 0..chunks {
+            let position = at + V2::new(air.random.range(-6.0, 6.0), air.random.range(0.0, 8.0));
+            let v = velocity + V2::new(air.random.range(-170.0, 170.0), air.random.range(40.0, 280.0));
+            air.release(area / chunks as f32, Blend::SNOW, 0.0, position, v, V2::new(8.0, 6.0), 0.6);
+            let puff = at + V2::new(air.random.range(-8.0, 8.0), air.random.range(0.0, 10.0));
+            air.puff(puff, 0.05);
+        }
+        air.heights_changed = true;
+        air.last_cursor_push = air.clock;
     }
 }
 
@@ -3223,7 +3411,7 @@ fn landing(layers: &[SnowLayer], x: f32, from: f32, to: f32, here: bool, ground:
     let mut highest = -f32::MAX;
     for (li, ledge) in layers.iter().enumerate().skip(1).filter(|_| here) {
         let Some(i) = ledge.index(x) else { continue };
-        if !ledge.visible[i] {
+        if !ledge.visible[i] || ledge.decor_only {
             continue;
         }
         let surface = ledge.surface(i);

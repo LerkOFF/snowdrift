@@ -1546,3 +1546,149 @@ fn the_pointer_low_on_the_screen_throws_the_snow_apart() {
     assert!(flying > 40, "nothing thrown: {flying}");
     assert_finite(&simulation);
 }
+
+// MARK: Winter decorations
+
+/// A simulation with a deep ground drift, with the plough kept away.
+fn snowy() -> SnowSimulation {
+    let mut simulation = SnowSimulation::new(1280.0, 800.0, 0.9);
+    simulation.snowmen.set_enabled(true);
+    for _ in 0..(60.0 / DT) as usize {
+        simulation.step(DT, AWAY);
+    }
+    simulation
+}
+
+/// Drags the pointer along the ground from `from` to `to`, button down, over `seconds`.
+fn roll(simulation: &mut SnowSimulation, from: f32, to: f32, seconds: f32) {
+    let steps = (seconds / DT) as usize;
+    for s in 0..=steps {
+        let x = from + (to - from) * s as f32 / steps as f32;
+        let surface = simulation.snow_surface(x);
+        simulation.pointer_down = true;
+        simulation.step(DT, V2::new(x, surface + 1.0));
+    }
+}
+
+fn settle(simulation: &mut SnowSimulation, at: V2, seconds: f32) {
+    for k in 0..(seconds / DT) as usize {
+        // The button stays down a moment with the pointer still, as a hand does, then goes up.
+        simulation.pointer_down = k < 24;
+        simulation.step(DT, at);
+    }
+}
+
+#[test]
+fn a_ball_rolled_along_the_ground_picks_up_snow() {
+    let mut simulation = snowy();
+    let before = piles(&simulation)[0].1;
+    roll(&mut simulation, 400.0, 640.0, 2.5);
+    let at = V2::new(640.0, simulation.snow_surface(640.0) + 20.0);
+    settle(&mut simulation, at, 1.0);
+    let balls = &simulation.snowmen.balls;
+    assert_eq!(balls.len(), 1);
+    assert!(balls[0].radius() > 20.0, "radius {}", balls[0].radius());
+    assert!(piles(&simulation)[0].1 < before, "the ground gave up the snow it rolled over");
+}
+
+#[test]
+fn three_balls_stacked_make_a_snowman_with_a_face() {
+    let mut simulation = snowy();
+    for (from, to) in [(300.0, 540.0), (700.0, 830.0), (900.0, 970.0)] {
+        roll(&mut simulation, from, to, 2.0);
+        let at = V2::new(to, simulation.snow_surface(to) + 20.0);
+        settle(&mut simulation, at, 1.0);
+    }
+    assert_eq!(simulation.snowmen.balls.len(), 3);
+    // Pick up the middle and the small one in turn, and put each on top of the big one.
+    for rank in [1, 2] {
+        let mut order: Vec<_> = simulation.snowmen.balls.iter().map(|b| (b.radius(), b.pos, b.id)).collect();
+        order.sort_by(|a, b| b.0.total_cmp(&a.0));
+        let big = order[0].1;
+        let (r, start, _) = order[rank];
+        let top = if rank == 1 { big.y + order[0].0 + r * 0.8 } else { order[1].1.y + order[1].0 + r * 0.8 };
+        let to = V2::new(big.x, top + 30.0);
+        for s in 0..=48 {
+            let t = s as f32 / 48.0;
+            simulation.pointer_down = true;
+            simulation.step(DT, start + (to - start) * t);
+        }
+        settle(&mut simulation, to, 1.5);
+    }
+    settle(&mut simulation, V2::new(1100.0, 600.0), 1.0);
+    let stacked = simulation.snowmen.balls.iter().filter(|b| b.support.is_some()).count();
+    assert_eq!(stacked, 2, "balls: {:?}", simulation.snowmen.balls.iter().map(|b| (b.pos, b.support)).collect::<Vec<_>>());
+    let sprites = simulation.snowmen.sprites(simulation.clock());
+    assert!(sprites.iter().any(|s| s.role == 2.0), "the head got a face");
+    assert!(sprites.iter().any(|s| s.role == 1.0), "the body got its buttons");
+}
+
+#[test]
+fn a_ball_dropped_hard_bursts_and_the_plough_clears_snowmen() {
+    let mut simulation = snowy();
+    roll(&mut simulation, 400.0, 600.0, 1.5);
+    let at = V2::new(600.0, simulation.snow_surface(600.0) + 20.0);
+    settle(&mut simulation, at, 0.5);
+    assert_eq!(simulation.snowmen.balls.len(), 1);
+    simulation.start_plow();
+    run(&mut simulation, 12.0, AWAY);
+    assert!(simulation.snowmen.balls.is_empty(), "the plough took it");
+}
+
+#[test]
+fn frost_grows_from_the_edges_and_the_pointer_wipes_it() {
+    let mut simulation = SnowSimulation::new(800.0, 600.0, 0.0);
+    simulation.frost.duration = 10.0;
+    simulation.frost.set_enabled(true);
+    assert!(simulation.frost.active());
+    run(&mut simulation, 12.0, AWAY);
+    assert!((simulation.frost.progress - 1.0).abs() < 1e-3);
+    let covered = simulation.frost.pattern.chunks(2).filter(|p| p[0] > 128).count();
+    assert!(covered > 20_000, "frost covers {covered} points");
+    // Wipe a patch of glass in the middle of the screen.
+    for k in 0..30 {
+        simulation.step(DT, V2::new(300.0 + k as f32 * 6.0, 300.0));
+    }
+    assert!(simulation.frost.wipe.iter().any(|&v| v > 200));
+    // And it freezes over again.
+    run(&mut simulation, 70.0, AWAY);
+    assert!(simulation.frost.wipe.iter().all(|&v| v == 0));
+}
+
+#[test]
+fn garlands_hang_on_windows_wide_enough_and_light_up() {
+    let mut simulation = SnowSimulation::new(1280.0, 800.0, 0.0);
+    simulation.garland = true;
+    simulation.window_snow = false;
+    simulation.update_windows(&[surface(7, 100.0, 600.0, 500.0), surface(8, 700.0, 500.0, 60.0)], 0.016, &HashSet::new(), &HashSet::new(), false);
+    let garlands = simulation.garlands();
+    assert_eq!(garlands.len(), 1, "only the wide window carries one");
+    assert_eq!(garlands[0].width, 500.0);
+    let lit = (0..500).flat_map(|x| (0..48).map(move |y| (x, y))).filter(|&(x, y)| crate::festive::garland_pixel(x as f32, y as f32, 500.0, 0.3, 1.0)[3] > 0.5).count();
+    assert!(lit > 300, "{lit} opaque pixels of wire and bulbs");
+    // With no snow settling on windows, none lands on this one.
+    simulation.set_intensity(0.9);
+    run(&mut simulation, 40.0, AWAY);
+    assert!(piles(&simulation).iter().skip(1).all(|p| p.1 < 1.0), "{:?}", piles(&simulation));
+}
+
+#[test]
+fn the_decor_layer_redoes_only_what_changed() {
+    use crate::decor::DecorLayer;
+    let mut simulation = SnowSimulation::new(640.0, 400.0, 0.0);
+    simulation.garland = true;
+    simulation.window_snow = false;
+    simulation.frost.duration = 4.0;
+    simulation.frost.set_enabled(true);
+    simulation.update_windows(&[surface(7, 100.0, 300.0, 300.0)], 0.016, &HashSet::new(), &HashSet::new(), false);
+    let mut layer = DecorLayer::new(640, 400, 1.0);
+    let first = layer.update(&mut simulation, 0.0);
+    assert_eq!(first, vec![[0, 0, 640, 400]]);
+    // Nothing moves, but the lights twinkle: only the garland is redone.
+    run(&mut simulation, 5.0, AWAY);
+    layer.update(&mut simulation, 5.0);
+    let again = layer.update(&mut simulation, 5.1);
+    assert!(!again.is_empty() && again.iter().all(|r| (r[2] - r[0]) * (r[3] - r[1]) < 640 * 400 / 2), "{again:?}");
+    let lit = layer.pixels.chunks(4).filter(|p| p[3] > 0).count();
+    assert!(lit > 10_000, "{lit} pixels drawn");
+}

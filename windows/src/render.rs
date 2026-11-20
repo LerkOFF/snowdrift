@@ -25,6 +25,7 @@ use windows::Win32::Graphics::Dxgi::{
 use windows::core::{Error, Interface, PCSTR, Result, s};
 use windows_numerics::Matrix3x2;
 
+use snowdrift_core::decor::DecorLayer;
 use snowdrift_core::geometry::V2;
 use snowdrift_core::halloween::{PUMPKIN_ASPECT, PUMPKIN_CANDLE};
 use snowdrift_core::simulation::{COLUMN_WIDTH, PumpkinSprite, SnowSimulation, Sprite};
@@ -151,6 +152,8 @@ pub struct Gpu {
     field_fragment: ID3D11PixelShader,
     glass_vertex: ID3D11VertexShader,
     glass_fragment: ID3D11PixelShader,
+    /// The garlands, snowmen and frost made on the processor, laid over the display.
+    decor_fragment: ID3D11PixelShader,
     adding: ID3D11BlendState,
     sampler: ID3D11SamplerState,
     /// Clear past the picture's edges, for the pumpkins' glow around them.
@@ -207,6 +210,7 @@ impl Gpu {
             let field_fragment = pixel_shader(&device, &code.field_fragment)?;
             let glass_vertex = vertex_shader(&device, &code.glass_vertex)?;
             let glass_fragment = pixel_shader(&device, &code.glass_fragment)?;
+            let decor_fragment = pixel_shader(&device, &code.decor_fragment)?;
 
             let element = |name: PCSTR, format: DXGI_FORMAT, offset: u32| D3D11_INPUT_ELEMENT_DESC {
                 SemanticName: name,
@@ -303,6 +307,7 @@ impl Gpu {
                 field_fragment,
                 glass_vertex,
                 glass_fragment,
+                decor_fragment,
                 adding: adding.ok_or_else(Error::empty)?,
                 sampler: sampler.ok_or_else(Error::empty)?,
                 bordered: bordered.ok_or_else(Error::empty)?,
@@ -419,6 +424,8 @@ pub struct Surface {
     height_capacity: usize,
     /// The field drops on the glass add up into, as big as the swap chain; made while there are any.
     field: Option<(ID3D11RenderTargetView, ID3D11ShaderResourceView)>,
+    /// The decorations' picture and where it lives on the graphics card; made while there are decorations.
+    decor: Option<(DecorLayer, ID3D11Texture2D, ID3D11ShaderResourceView)>,
 }
 
 impl Surface {
@@ -466,6 +473,7 @@ impl Surface {
                 heights: None,
                 height_capacity: 0,
                 field: None,
+                decor: None,
             })
         }
     }
@@ -477,7 +485,46 @@ impl Surface {
         }
     }
 
-    pub fn draw(&mut self, gpu: &Gpu, simulation: &SnowSimulation, ambient: Ambient, time: f32) -> Result<()> {
+    /// Brings the decorations' picture up to date and onto the graphics card, in the pieces that changed.
+    fn decorate(&mut self, gpu: &Gpu, simulation: &mut SnowSimulation, time: f32) -> Result<Option<ID3D11ShaderResourceView>> {
+        if !simulation.decorates() {
+            self.decor = None;
+            return Ok(None);
+        }
+        if self.decor.is_none() {
+            let desc = D3D11_TEXTURE2D_DESC {
+                Width: self.width,
+                Height: self.height,
+                MipLevels: 1,
+                ArraySize: 1,
+                Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+                Usage: D3D11_USAGE_DEFAULT,
+                BindFlags: D3D11_BIND_SHADER_RESOURCE.0 as u32,
+                CPUAccessFlags: 0,
+                MiscFlags: 0,
+            };
+            let mut texture = None;
+            let mut view = None;
+            unsafe {
+                gpu.device.CreateTexture2D(&desc, None, Some(&mut texture))?;
+                let texture = texture.ok_or_else(Error::empty)?;
+                gpu.device.CreateShaderResourceView(&texture, None, Some(&mut view))?;
+                self.decor = Some((DecorLayer::new(self.width as usize, self.height as usize, 1.0), texture, view.ok_or_else(Error::empty)?));
+            }
+        }
+        let Some((layer, texture, view)) = &mut self.decor else { return Ok(None) };
+        for rect in layer.update(simulation, time) {
+            let rows = layer.rows(rect);
+            let area = D3D11_BOX { left: rect[0] as u32, top: rect[1] as u32, front: 0, right: rect[2] as u32, bottom: rect[3] as u32, back: 1 };
+            unsafe { gpu.context.UpdateSubresource(&*texture, 0, Some(&area), rows.as_ptr().cast(), ((rect[2] - rect[0]) * 4) as u32, 0) };
+        }
+        Ok(Some(view.clone()))
+    }
+
+    pub fn draw(&mut self, gpu: &Gpu, simulation: &mut SnowSimulation, ambient: Ambient, time: f32) -> Result<()> {
+        let decor = self.decorate(gpu, simulation, time)?;
+        let simulation: &SnowSimulation = simulation;
         self.reserve(gpu, simulation.sprite_count(), simulation.column_count())?;
         let glass = if simulation.has_glass_drops() {
             let field = self.field(gpu)?;
@@ -629,6 +676,18 @@ impl Surface {
                     context.PSSetShaderResources(4, Some(&[None]));
                 }
             }
+            if let Some(view) = decor {
+                context.OMSetRenderTargets(Some(&[Some(self.target_view.clone())]), None);
+                context.OMSetBlendState(&gpu.blend, None, u32::MAX);
+                context.RSSetState(&gpu.raster);
+                context.IASetInputLayout(None);
+                context.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                context.VSSetShader(&gpu.glass_vertex, None);
+                context.PSSetShader(&gpu.decor_fragment, None);
+                context.PSSetShaderResources(5, Some(&[Some(view)]));
+                context.Draw(3, 0);
+                context.PSSetShaderResources(5, Some(&[None]));
+            }
             self.swap_chain.Present(1, DXGI_PRESENT(0)).ok()
         }
     }
@@ -715,6 +774,7 @@ struct Code {
     field_fragment: Vec<u8>,
     glass_vertex: Vec<u8>,
     glass_fragment: Vec<u8>,
+    decor_fragment: Vec<u8>,
 }
 
 impl Code {
@@ -736,6 +796,7 @@ impl Code {
             field_fragment: compile(s!("fieldFragment"), s!("ps_4_0"))?,
             glass_vertex: compile(s!("glassVertex"), s!("vs_4_0"))?,
             glass_fragment: compile(s!("glassFragment"), s!("ps_4_0"))?,
+            decor_fragment: compile(s!("decorFragment"), s!("ps_4_0"))?,
         };
         Ok(CODE.get_or_init(|| code))
     }

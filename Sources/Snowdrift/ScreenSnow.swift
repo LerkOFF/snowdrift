@@ -104,6 +104,10 @@ final class ScreenSnow {
         simulation.accumulates = !settled.isEmpty
         simulation.groundSettles = settled.contains(.ground)
         simulation.fallingOpacity = Float(Preferences.fallingOpacity)
+        simulation.windowSnow = settled.contains(.windows)
+        simulation.garland = Preferences.garland
+        simulation.snowmen.enabled = Preferences.snowmen
+        simulation.frost.enabled = Preferences.frost
         let renderer: Renderer
         do {
             renderer = try Renderer(device: device, pixelFormat: .bgra8Unorm, simulation: simulation)
@@ -137,8 +141,12 @@ final class ScreenSnow {
             // Behind the windows the snow still settles on them: what lies on a window's top edge is above it, in
             // plain view.
             let settled = surfaces()
-            let tracked = !settled.isDisjoint(with: .tracked)
-            tracker.collects = settled.intersection(.tracked)
+            // The string of lights hangs from the windows even where no snow settles on them.
+            var collected = settled.intersection(.tracked)
+            if simulation.garland { collected.insert(.windows) }
+            let tracked = !collected.isEmpty
+            simulation.windowSnow = settled.contains(.windows)
+            tracker.collects = collected
             let update = tracked ? tracker.poll(now: now, eager: NSEvent.pressedMouseButtons != 0) : nil
             window.notificationLevel = tracked ? tracker.notificationLevel : nil
             watchForFullScreen(now: now, tracked: tracked)
@@ -148,10 +156,12 @@ final class ScreenSnow {
             simulation.windowFrames = tracker.covers.map { SIMD4(Float($0.minX), Float($0.minY), Float($0.maxX), Float($0.maxY)) }
             return update
         }
+        renderer.pointerDown = { NSEvent.pressedMouseButtons & 1 != 0 }
         renderer.borrowedSnow = { [unowned self] in
             surfaces().contains(.windows) ? displays.borrowed(by: self) : []
         }
         renderer.stepped = { [unowned self] in
+            catchPointer()
             displays.pass(from: self)
             plowOverlay.update(simulation.plow, screen: self.screen, like: window)
         }
@@ -170,6 +180,20 @@ final class ScreenSnow {
         window.contentView = view
         window.orderFrontRegardless()
         checkCovered()
+    }
+
+    /// While the pointer is over a snowball or the snow to roll one from, the overlay takes its clicks instead of
+    /// letting them through to the windows under it.
+    private func catchPointer() {
+        let wants = simulation.snowmen.wantsPointer
+        if window.ignoresMouseEvents == wants { window.ignoresMouseEvents = !wants }
+        if wants { (simulation.snowmen.holding ? NSCursor.closedHand : NSCursor.openHand).set() }
+    }
+
+    /// Wakes the snow after a decoration was turned on or off.
+    func decorationsChanged() {
+        if !simulation.snowmen.enabled && !window.ignoresMouseEvents { window.ignoresMouseEvents = true }
+        simulation.stirred()
     }
 
     func fit(to screen: NSScreen) {

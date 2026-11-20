@@ -674,6 +674,7 @@ final class SnowSimulation {
             phases: (seed.range(0, 2 * .pi), seed.range(0, 2 * .pi))
         )
         layers = [ground]
+        frost.resize(width: width, height: height)
         updateTarget()
     }
 
@@ -684,7 +685,7 @@ final class SnowSimulation {
         intensity <= 0 && !halloween && flakes.isEmpty && grains.isEmpty && motes.isEmpty && ghosts.isEmpty
             && fallingSigns.isEmpty && snowballs.isEmpty && gust == nil && !dormant.values.contains { $0.ledge.top > 0 } && parking.isEmpty && lying.isEmpty && nextMode == nil
             && splashes.isEmpty && glassDrops.isEmpty && !wet
-            && !layers.contains { $0.top > 0 }
+            && !layers.contains { $0.top > 0 } && !decorates
     }
     /// Running drops or beads on the glass, drawn from a field of their own.
     var hasGlassDrops: Bool { glassDrops.contains { !$0.hanging } }
@@ -703,6 +704,7 @@ final class SnowSimulation {
         ground.resize(columns: Self.columnCount(for: width, columnWidth: columnWidth))
         self.width = width
         self.height = height
+        frost.resize(width: width, height: height)
         updateTarget()
     }
 
@@ -734,9 +736,17 @@ final class SnowSimulation {
         expireParking()
         for ledge in ledgeList { carry(ledge, dt: dt) }
         forgetBuriedSnow(dt: dt)
-        trackCursor(point, dt: dt)
+        let festiveChanged = stepFestive(dt: dt, pointer: point)
+        if snowmen.wantsPointer {
+            // The pointer is on a ball or the snow it rolls up: the snow is for the ball, not to be swept aside.
+            for layer in heldLayers { layer.releaseSupport() }
+            heldLayers.removeAll(keepingCapacity: true)
+            cursor = nil
+        } else {
+            trackCursor(point, dt: dt)
+        }
         advancePlow(dt: dt)
-        dockHover(dt: dt)
+        if !snowmen.wantsPointer { dockHover(dt: dt) }
         for ledge in ledgeList where !ledge.carried { confine(ledge) }
         blow(dt: dt)
         skim(dt: dt)
@@ -763,6 +773,7 @@ final class SnowSimulation {
         }
         // Only a cursor that actually displaces snow needs the full rate; one passing near it or resting in it changes nothing.
         let pushed = clock - lastWindowMotion < 0.6 || clock - lastCursorPush < 0.3 || gust != nil || !snowballs.isEmpty || clock - hitAt < 0.6
+            || clock - snowmen.movedAt < 0.4
         // The steady trickle off window corners is a few tiny grains at a time; they read fine at the calm rate.
         let flying = grains.count > 24 || clock < scatteredUntil || abs(slideWind) > 20
         if pushed {
@@ -773,7 +784,7 @@ final class SnowSimulation {
             pace = .calm
         }
         let changed = wasMoving || !flakes.isEmpty || !grains.isEmpty || !motes.isEmpty || !ghosts.isEmpty || !fallingSigns.isEmpty || !snowballs.isEmpty
-            || !splashes.isEmpty || !glassDrops.isEmpty || wet || heightsChanged || plow != nil || windowsChanged || pumpkinsMoved || restyled || borrowedChanged
+            || !splashes.isEmpty || !glassDrops.isEmpty || wet || heightsChanged || plow != nil || windowsChanged || pumpkinsMoved || restyled || borrowedChanged || festiveChanged
         restyled = false
         windowsChanged = false
         borrowedChanged = false
@@ -1018,6 +1029,101 @@ final class SnowSimulation {
         return result
     }
 
+    // MARK: - Festive
+
+    /// A string of lights along the top of every window.
+    var garland = false
+    /// Snow settles on windows; if not, the windows carry decorations only.
+    var windowSnow = true
+    /// The primary mouse button is down.
+    var pointerDown = false
+    let snowmen = Snowmen()
+    let frost = Frost()
+
+    /// Anything of the winter decorations that moves or must be drawn on its own.
+    var decorates: Bool { garland && !ledgeList.isEmpty || !snowmen.isEmpty || frost.active }
+    var decorAnimates: Bool { decorates }
+    var clockNow: Double { clock }
+
+    private lazy var terrain = SnowTerrain(
+        width: width,
+        probe: { [unowned self] x in snowProbe(x) },
+        take: { [unowned self] x, half, share in takeSnow(x, half: half, share: share) },
+        burst: { [unowned self] area, position, velocity in burstSnow(area, at: position, velocity: velocity) }
+    )
+
+    private func stepFestive(dt: Float, pointer point: SIMD2<Float>) -> Bool {
+        let reachable = point.x > -9000
+        terrain.width = width
+        var changed = snowmen.update(dt: dt, pointer: reachable ? point : nil, down: pointerDown, terrain: terrain, clock: clock)
+        if frost.step(dt: dt, pointer: reachable ? point : nil, clock: clock) { changed = true }
+        return changed
+    }
+
+    func clearSnowmen() { snowmen.smashAll(terrain) }
+
+    /// What carries a ball at x: the Dock's top while it is under it and higher than the ground, else the ground.
+    private func supportLayer(at x: Float) -> SnowLayer {
+        if accumulates, let dock = layers.first(where: \.isDock), let i = dock.index(at: x), dock.visible[i] {
+            if dock.surface(i) >= ground.surface(ground.clampedIndex(at: x)) { return dock }
+        }
+        return ground
+    }
+
+    func snowProbe(_ x: Float) -> SnowTerrain.Probe {
+        let layer = supportLayer(at: x)
+        let i = layer.clampedIndex(at: x)
+        return SnowTerrain.Probe(surface: layer.surface(i), depth: layer.heights[i], below: layer.isDock ? 2 : 14)
+    }
+
+    private func takeSnow(_ x: Float, half: Float, share: Float) -> Float {
+        let layer = supportLayer(at: x)
+        let lower = max(0, Int(((x - half - layer.base.x) / columnWidth).rounded(.down)))
+        let upper = min(layer.count - 1, Int(((x + half - layer.base.x) / columnWidth).rounded(.down)))
+        guard lower <= upper else { return 0 }
+        var area: Float = 0
+        for i in lower...upper where layer.visible[i] {
+            let h = layer.heights[i]
+            guard h > 0.001 else { continue }
+            let taken = h * share
+            layer.set(i, h - taken)
+            area += taken * columnWidth
+        }
+        if area > 0 {
+            heightsChanged = true
+            lastCursorPush = clock
+        }
+        return area
+    }
+
+    /// A ball of snow bursting: its snow goes up in clumps and a puff of powder, and settles again.
+    private func burstSnow(_ area: Float, at position: SIMD2<Float>, velocity: SIMD2<Float>) {
+        let chunks = max(1, min(28, Int(area / 40)))
+        for _ in 0..<chunks {
+            release(area / Float(chunks), at: position + SIMD2(random.range(-6, 6), random.range(0, 8)),
+                    velocity: velocity + SIMD2(random.range(-170, 170), random.range(40, 280)), spread: SIMD2(8, 6), scatter: 0.6)
+            puff(at: position + SIMD2(random.range(-8, 8), random.range(0, 10)), area: 0.05)
+        }
+        heightsChanged = true
+        lastCursorPush = clock
+        stirred()
+    }
+
+    /// The window edges the garlands hang from.
+    func garlands() -> [GarlandSprite] {
+        guard garland else { return [] }
+        var result: [GarlandSprite] = []
+        for (id, ledge) in ledges where !ledge.isDock && ledge.width >= 110 {
+            result.append(GarlandSprite(
+                anchor: ledge.origin,
+                width: ledge.width,
+                seed: Float(id % 997) / 997,
+                covers: ledge.faceOccluders
+            ))
+        }
+        return result
+    }
+
     // MARK: - Pumpkins
 
     /// Each pumpkin sits on the drift under it, sunk into it a little under half its height, or on the bottom of the
@@ -1107,6 +1213,7 @@ final class SnowSimulation {
             ledge.occluders = Array(blockers.prefix(16))
             ledge.faceOccluders = surface.cover.prefix(16).map { SIMD4<Float>(Float($0.minX), Float($0.minY), Float($0.maxX), Float($0.maxY)) }
             ledge.isDock = surface.isDock
+            ledge.decorOnly = !windowSnow && !surface.isDock
             ledge.face = Float(surface.frame.height)
             ledge.updateVisibility(seen: seenSpan, blockers: blockers)
         }
@@ -1127,7 +1234,7 @@ final class SnowSimulation {
             }
         }
         ledgeList = Array(ledges.values)
-        layers = [ground] + ledgeList
+        layers = [ground] + ledgeList.filter { !$0.decorOnly }
     }
 
     /// Keeps the snow of a window gone to another Space for its return; a bare window gets a fresh ledge when it's back.
@@ -1766,6 +1873,7 @@ final class SnowSimulation {
         lastCursorPush = clock
         let previous = p.tip
         p.tip += p.dir * plowSpeed * dt
+        if !snowmen.isEmpty { snowmen.smash(from: previous - p.dir * 14, to: p.tip + p.dir * 14, terrain) }
         let from = max(0, min(previous, p.tip)), to = min(width, max(previous, p.tip))
         var scraped = Gathered()
         if to > from, ground.count > 0 {
@@ -1993,7 +2101,7 @@ final class SnowSimulation {
             let i = Int(((x - span.x) / columnWidth).rounded(.down))
             guard i >= 0 && i < span.count else { continue }
             let ledge = ledgeList[k]
-            guard ledge.visible[i] else { continue }
+            guard ledge.visible[i], !ledge.decorOnly else { continue }
             let surface = ledge.surface(i)
             // Entering the snow from above the window's edge counts, even if the surface rose this frame.
             if from >= ledge.previousBaseY + ledge.bed[i] && to <= surface && surface > highest {
@@ -3827,7 +3935,7 @@ extension SnowSimulation {
             heldLayers.removeAll { $0 === ledge }
         }
         ledgeList = Array(ledges.values)
-        layers = [ground] + ledgeList
+        layers = [ground] + ledgeList.filter { !$0.decorOnly }
         windowsChanged = true
         ledge.movedAt -= clock
         ledge.trimmedAt -= clock
@@ -3861,7 +3969,7 @@ extension SnowSimulation {
         lying += carried.leaves
         glassDrops += carried.drops
         ledgeList = Array(ledges.values)
-        layers = [ground] + ledgeList
+        layers = [ground] + ledgeList.filter { !$0.decorOnly }
         windowsChanged = true
         stirred()
     }

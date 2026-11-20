@@ -1,5 +1,7 @@
 //! Draws one display's simulation into a canvas: the drifts, the snowplow and everything in the air.
 
+use snowdrift_core::decor::FrostLayer;
+use snowdrift_core::festive::{BALL_REACH, GARLAND_ABOVE, GARLAND_DEPTH, ball_pixel, garland_pixel};
 use snowdrift_core::simulation::{PlowState, Sprite, SnowSimulation};
 
 use crate::canvas::{Canvas, hash, lerp, smooth};
@@ -10,16 +12,18 @@ const PLOW_SIZE: f32 = 1.25;
 pub struct Frame {
     sprites: Vec<Sprite>,
     heights: Vec<f32>,
+    /// The frost as a picture, touched up where it changed.
+    frost: Option<FrostLayer>,
 }
 
 impl Frame {
     pub fn new() -> Frame {
-        Frame { sprites: Vec::new(), heights: Vec::new() }
+        Frame { sprites: Vec::new(), heights: Vec::new(), frost: None }
     }
 
     /// `scale` is physical pixels to a point of the simulation; `time` is seconds since the start, for the little
     /// animations (glints, smoke, the flasher).
-    pub fn draw(&mut self, canvas: &mut Canvas, simulation: &SnowSimulation, scale: f32, time: f32) {
+    pub fn draw(&mut self, canvas: &mut Canvas, simulation: &mut SnowSimulation, scale: f32, time: f32) {
         canvas.clear();
         self.sprites.clear();
         self.sprites.resize(simulation.sprite_count() + 64, Sprite::default());
@@ -29,6 +33,7 @@ impl Frame {
         let piles = simulation.write_layers(&mut self.heights);
         let height = canvas.height as f32;
 
+        draw_balls(canvas, simulation, scale, height);
         for pile in &piles {
             let heights = &self.heights[pile.offset..pile.offset + 4 * pile.count];
             draw_pile(canvas, heights, pile.count, pile.origin.x, pile.origin.y, pile.top, pile.bottom, pile.occluders, scale, time);
@@ -36,11 +41,63 @@ impl Frame {
         if let Some(plow) = simulation.plow() {
             draw_plow(canvas, &plow, scale, time);
         }
+        draw_garlands(canvas, simulation, scale, height, time);
         for sprite in &self.sprites[..count] {
             draw_sprite(canvas, sprite, scale, height);
         }
+        let layer = self.frost.get_or_insert_with(|| FrostLayer::new(canvas.width, canvas.height, scale));
+        if layer.width != canvas.width || layer.height != canvas.height || layer.scale != scale {
+            *layer = FrostLayer::new(canvas.width, canvas.height, scale);
+        }
+        layer.update(simulation);
+        canvas.over_layer(&layer.pixels);
     }
 }
+
+/// The strings of lights along the windows' top edges. `height` is the canvas height in pixels: the simulation's y
+/// runs up from the bottom of the display.
+fn draw_garlands(canvas: &mut Canvas, simulation: &SnowSimulation, scale: f32, height: f32, time: f32) {
+    for garland in simulation.garlands() {
+        let x0 = ((garland.anchor.x - 6.0) * scale).floor().max(0.0) as i32;
+        let x1 = (((garland.anchor.x + garland.width + 6.0) * scale).ceil() as i32).min(canvas.width as i32);
+        let top = height - garland.anchor.y * scale;
+        let y0 = (top - GARLAND_ABOVE * scale).floor().max(0.0) as i32;
+        let y1 = ((top + GARLAND_DEPTH * scale).ceil() as i32).min(canvas.height as i32);
+        for py in y0..y1 {
+            for px in x0..x1 {
+                // In points from the left end and the top edge of the window.
+                let (lx, ly) = ((px as f32 + 0.5) / scale - garland.anchor.x, (py as f32 + 0.5 - top) / scale);
+                // What a window in front hides, in the simulation's coordinates.
+                let (sx, sy) = ((px as f32 + 0.5) / scale, (height - py as f32 - 0.5) / scale);
+                if garland.covers.iter().any(|c| sx >= c[0] && sx <= c[2] && sy >= c[1] && sy <= c[3]) {
+                    continue;
+                }
+                canvas.over(px, py, garland_pixel(lx, ly, garland.width, garland.seed, time));
+            }
+        }
+    }
+}
+
+/// The balls of snow and what the snowmen wear.
+fn draw_balls(canvas: &mut Canvas, simulation: &SnowSimulation, scale: f32, height: f32) {
+    for ball in simulation.snowmen.sprites(simulation.clock()) {
+        let reach = ball.radius * BALL_REACH;
+        let (cx, cy) = (ball.center.x * scale, height - ball.center.y * scale);
+        let x0 = (cx - reach * scale).floor().max(0.0) as i32;
+        let x1 = ((cx + reach * scale).ceil() as i32).min(canvas.width as i32);
+        let y0 = (cy - reach * scale).floor().max(0.0) as i32;
+        let y1 = ((cy + reach * scale).ceil() as i32).min(canvas.height as i32);
+        let pixel = 1.0 / (ball.radius * scale).max(1.0);
+        for py in y0..y1 {
+            for px in x0..x1 {
+                let lx = (px as f32 + 0.5 - cx) / (ball.radius * scale);
+                let ly = -(py as f32 + 0.5 - cy) / (ball.radius * scale);
+                canvas.over(px, py, ball_pixel(lx, ly, pixel, &ball, hash(px as f32, py as f32)));
+            }
+        }
+    }
+}
+
 
 fn sample(values: &[f32], x: f32) -> f32 {
     let count = values.len();

@@ -18,6 +18,12 @@ pub struct Settings {
     pub over_full_screen: bool,
     /// Snow also settles on dialogs and big pictures inside windows, read through the accessibility bus.
     pub panels: bool,
+    /// A string of lights along the top of every window.
+    pub garland: bool,
+    /// Balls of snow to roll up and stack into snowmen.
+    pub snowmen: bool,
+    /// Frost creeping in from the edges of the screen, wiped by the pointer.
+    pub frost: bool,
     pub picked: Picked,
 }
 
@@ -31,12 +37,15 @@ impl Default for Settings {
             snow_on_windows: true,
             over_full_screen: false,
             panels: false,
+            garland: false,
+            snowmen: false,
+            frost: false,
             picked: Picked::load(None, None, None, [None, None]),
         }
     }
 }
 
-pub const KEYS: [&str; 9] = ["intensity", "opacity", "ground", "melt", "windows", "fullscreen", "panels", "mode", "mixed"];
+pub const KEYS: [&str; 13] = ["intensity", "opacity", "ground", "melt", "windows", "fullscreen", "panels", "garland", "snowmen", "frost", "newyear", "mode", "mixed"];
 
 pub fn dir() -> PathBuf {
     let base = std::env::var_os("XDG_CONFIG_HOME")
@@ -96,7 +105,7 @@ impl Settings {
     pub fn to_text(&self) -> String {
         let on = |v: bool| if v { "on" } else { "off" };
         format!(
-            "intensity={}\nopacity={}\nground={}\nmelt={}\nwindows={}\nfullscreen={}\npanels={}\nmode={}\nmixed={}\nmix={},{}\n",
+            "intensity={}\nopacity={}\nground={}\nmelt={}\nwindows={}\nfullscreen={}\npanels={}\ngarland={}\nsnowmen={}\nfrost={}\nmode={}\nmixed={}\nmix={},{}\n",
             self.intensity,
             self.opacity,
             on(self.ground),
@@ -104,6 +113,9 @@ impl Settings {
             on(self.snow_on_windows),
             on(self.over_full_screen),
             on(self.panels),
+            on(self.garland),
+            on(self.snowmen),
+            on(self.frost),
             mode_name(self.picked.mode),
             on(self.picked.mixed),
             mode_name(self.picked.mix[0]),
@@ -123,6 +135,15 @@ impl Settings {
             "windows" => self.snow_on_windows = switch()?,
             "fullscreen" => self.over_full_screen = switch()?,
             "panels" => self.panels = switch()?,
+            "garland" => self.garland = switch()?,
+            "snowmen" => self.snowmen = switch()?,
+            "frost" => self.frost = switch()?,
+            "newyear" => {
+                let on = switch()?;
+                self.garland = on;
+                self.snowmen = on;
+                self.frost = on;
+            }
             "mode" => {
                 let mode = mode_from(value).ok_or("mode is snow, autumn, rain or blossom")?;
                 self.picked.pick(mode);

@@ -33,7 +33,9 @@ Usage: snowdrift [command]
   plow                   send the snowplow along the bottom of the screen
   clear                  blow the snow away
   set <name> <value>     change a setting: intensity 0-100, opacity 10-100, ground on|off, melt on|off,
-                         windows on|off, fullscreen on|off, panels on|off, mode snow|autumn|rain|blossom, mixed on|off
+                         windows on|off, fullscreen on|off, panels on|off, garland on|off, snowmen on|off,
+                         frost on|off, newyear on|off (all three at once), mode snow|autumn|rain|blossom, mixed on|off
+  snowmen clear          burst every snowman and ball
   status                 what is running and how it is set
   autostart on|off       start at login
   update                 check for a newer version, download it, replace this one and restart
@@ -50,6 +52,7 @@ fn main() {
         ["stop"] => ask("stop"),
         ["plow"] => ask("plow"),
         ["clear"] => ask("clear"),
+        ["snowmen", "clear"] => ask("snowmen clear"),
         ["status"] => status(),
         ["set", name, value] => ask(&format!("set {name} {value}")),
         ["autostart", on @ ("on" | "off")] => report(install::autostart(on == "on")),
@@ -169,6 +172,8 @@ struct Screen {
     last_draw: Instant,
     blank: bool,
     hidden: bool,
+    /// The overlay is taking clicks instead of letting them through.
+    catching: bool,
 }
 
 fn new_simulation(width: f32, height: f32, settings: &Settings) -> SnowSimulation {
@@ -185,6 +190,10 @@ fn apply(simulation: &mut SnowSimulation, settings: &Settings) {
     simulation.accumulates = settings.accumulates();
     simulation.ground_settles = settings.ground;
     simulation.falling_opacity = settings.opacity as f32 / 100.0;
+    simulation.garland = settings.garland;
+    simulation.window_snow = settings.snow_on_windows;
+    simulation.snowmen.set_enabled(settings.snowmen);
+    simulation.frost.set_enabled(settings.frost);
     simulation.set_intensity(settings.intensity as f32 / 100.0);
 }
 
@@ -235,6 +244,10 @@ Turn on compositing in your desktop's settings, or start one (for example `picom
                 }
                 (Some("plow"), _, _) => {
                     screens.iter_mut().for_each(|s| s.simulation.start_plow());
+                    "ok".into()
+                }
+                (Some("snowmen"), Some("clear"), _) => {
+                    screens.iter_mut().for_each(|s| s.simulation.clear_snowmen());
                     "ok".into()
                 }
                 (Some("clear"), _, _) => {
@@ -289,7 +302,7 @@ Turn on compositing in your desktop's settings, or start one (for example `picom
         }
 
         // The windows: read about thirty times a second, and handed to the snow when they moved.
-        if settings.snow_on_windows && now.duration_since(windows_at) >= Duration::from_millis(33) {
+        if (settings.snow_on_windows || settings.garland) && now.duration_since(windows_at) >= Duration::from_millis(33) {
             windows_at = now;
             let fresh = display.clients();
             // The process in front tells the panel reader whose tree to look at.
@@ -320,7 +333,7 @@ Turn on compositing in your desktop's settings, or start one (for example `picom
                 }
                 known = open;
             }
-        } else if !settings.snow_on_windows && !known.is_empty() {
+        } else if !(settings.snow_on_windows || settings.garland) && !known.is_empty() {
             known.clear();
             clients.clear();
             for screen in &mut screens {
@@ -330,7 +343,10 @@ Turn on compositing in your desktop's settings, or start one (for example `picom
             }
         }
 
-        let pointer = display.pointer();
+        let (pointer, pressed) = match display.pointer_state() {
+            Some((x, y, down)) => (Some((x, y)), down),
+            None => (None, false),
+        };
         let time = started.elapsed().as_secs_f32();
         let mut soonest = now + Duration::from_millis(250);
         for screen in &mut screens {
@@ -354,7 +370,14 @@ Turn on compositing in your desktop's settings, or start one (for example `picom
             let cursor = pointer
                 .map(|(x, y)| V2::new((x - screen.area.0) as f32 / scale, (screen.area.1 + screen.area.3 as i32 - y) as f32 / scale))
                 .unwrap_or(AWAY);
+            screen.simulation.pointer_down = pressed;
             let changed = screen.simulation.step(dt, cursor);
+            // Over a ball of snow, or holding one, the overlay takes the clicks; elsewhere they go through.
+            let wants = screen.simulation.snowmen.wants_pointer;
+            if wants != screen.catching {
+                screen.catching = wants;
+                let _ = display.catch_clicks(&screen.overlay, screen.area.2, screen.area.3, wants);
+            }
             if !changed && screen.simulation.is_empty() {
                 if !screen.blank {
                     screen.canvas.clear();
@@ -375,7 +398,7 @@ Turn on compositing in your desktop's settings, or start one (for example `picom
             soonest = soonest.min(screen.next_due);
             // A still drift only needs a slow refresh for its glints.
             if changed || screen.blank || now.duration_since(screen.last_draw) > Duration::from_millis(500) {
-                screen.frame.draw(&mut screen.canvas, &screen.simulation, scale, time);
+                screen.frame.draw(&mut screen.canvas, &mut screen.simulation, scale, time);
                 if screen.hidden || !screen.overlay.shown {
                     let _ = display.show(&mut screen.overlay);
                     screen.hidden = false;
@@ -420,6 +443,7 @@ fn make_screens(display: &mut Display, monitors: &[Monitor], inset: &HashMap<usi
             last_draw: Instant::now(),
             blank: false,
             hidden: false,
+            catching: false,
         });
     }
     Ok(screens)

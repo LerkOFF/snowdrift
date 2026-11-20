@@ -16,6 +16,7 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
 use windows::Win32::System::Threading::SetEvent;
 use windows::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook};
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::WindowsAndMessaging::*;
 use windows::core::{BOOL, Error, PCWSTR, Result, w};
@@ -324,7 +325,9 @@ impl Screen {
             self.follow(tracker, clock, now);
         }
         let cursor = self.cursor();
+        self.simulation.pointer_down = unsafe { GetAsyncKeyState(VK_LBUTTON.0 as i32) } as u16 & 0x8000 != 0;
         let changed = self.simulation.step(dt, cursor);
+        self.catch_clicks(self.simulation.snowmen.wants_pointer);
         self.follow_plow();
         // Nothing to draw and nothing on its way: the frame shown last stays up, as it would, till the snow is stirred.
         if !changed && self.simulation.is_empty() {
@@ -362,6 +365,7 @@ impl Screen {
         if !(changed
             || lantern_moved
             || fading
+            || self.simulation.decor_animates()
             || ((self.simulation.has_snow() || !self.simulation.pumpkins().is_empty()) && self.idle_frames % 2 == 0))
         {
             return Ok(false);
@@ -369,7 +373,7 @@ impl Screen {
         // Halloween night: cold moonlight, violet shadows and a candle's glow along the drifts' edges.
         let (light, shadow_tint) = moonlit(sky.daylight, self.shadow_tint, sky.night);
         let ambient = Ambient { light, shadow_tint, rim: [1.0, 0.56, 0.2, 0.3 * sky.night], lantern: (cursor, sky.night) };
-        self.surface.draw(gpu, &self.simulation, ambient, time)?;
+        self.surface.draw(gpu, &mut self.simulation, ambient, time)?;
         Ok(true)
     }
 
@@ -442,6 +446,12 @@ impl Screen {
             corner_radius: 0.0,
             corner_exponent: 2.0,
         })
+    }
+
+    /// Has the windows handed over again at the next frame, as after the lights were turned on or off.
+    pub fn resync_windows(&mut self) {
+        self.surfaces.clear();
+        self.windows_seen = 0;
     }
 
     pub fn drop_window_snow(&mut self) {
@@ -617,6 +627,22 @@ impl Screen {
 
     pub fn behind_windows(&self) -> bool {
         self.layer.is_some()
+    }
+
+    /// Over a ball of snow, or holding one, the overlay takes the clicks; elsewhere they pass through to what is under it.
+    /// Only the overlay above the windows can: one behind them in the wallpaper's layer never has the pointer.
+    fn catch_clicks(&self, catch: bool) {
+        if self.layer.is_some() {
+            return;
+        }
+        unsafe {
+            let style = GetWindowLongPtrW(self.overlay.0, GWL_EXSTYLE);
+            let transparent = style as u32 & WS_EX_TRANSPARENT.0 != 0;
+            if catch == transparent {
+                let wanted = if catch { style & !(WS_EX_TRANSPARENT.0 as isize) } else { style | WS_EX_TRANSPARENT.0 as isize };
+                SetWindowLongPtrW(self.overlay.0, GWL_EXSTYLE, wanted);
+            }
+        }
     }
 
     /// The pointer in overlay coordinates.
@@ -883,7 +909,15 @@ pub(crate) fn set_capture(window: HWND, shown: bool) {
 
 unsafe extern "system" fn overlay_procedure(window: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match message {
-        WM_NCHITTEST => LRESULT(HTTRANSPARENT as isize),
+        WM_NCHITTEST => {
+            // Click-through unless a ball of snow has asked for the clicks (see `catch_clicks`).
+            let style = unsafe { GetWindowLongPtrW(window, GWL_EXSTYLE) } as u32;
+            LRESULT(if style & WS_EX_TRANSPARENT.0 == 0 { HTCLIENT as isize } else { HTTRANSPARENT as isize })
+        }
+        WM_SETCURSOR if unsafe { GetWindowLongPtrW(window, GWL_EXSTYLE) } as u32 & WS_EX_TRANSPARENT.0 == 0 => {
+            unsafe { SetCursor(LoadCursorW(None, IDC_HAND).ok()) };
+            LRESULT(1)
+        }
         WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
         WM_DISPLAYCHANGE | WM_DPICHANGED => {
             DISPLAYS_CHANGED.set(true);

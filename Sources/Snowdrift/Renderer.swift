@@ -34,6 +34,24 @@ struct PumpkinUniforms {
     var seed: Float
 }
 
+struct GarlandUniforms {
+    var anchor: SIMD2<Float>
+    var width: Float
+    var seed: Float
+    var coverCount: Float
+    var depth: Float
+}
+
+struct BallUniforms {
+    var center: SIMD2<Float>
+    var radius: Float
+    var seed: Float
+    var roll: Float
+    var role: Float
+    var pop: Float
+    var pad: Float = 0
+}
+
 struct SignUniforms {
     var anchor: SIMD2<Float>
     var size: SIMD2<Float>
@@ -48,6 +66,8 @@ enum RendererError: Error {
 final class Renderer: NSObject, MTKViewDelegate {
     var cursorLocation: () -> SIMD2<Float> = { SIMD2(-10_000, -10_000) }
     var windowSurfaces: (CFTimeInterval) -> WindowUpdate? = { _ in nil }
+    /// Whether the primary mouse button is down.
+    var pointerDown: () -> Bool = { false }
     /// Snow on windows reaching over from other displays, which keep it.
     var borrowedSnow: () -> [BorrowedSnow] = { [] }
     /// Called after each step, for what the step sent on to other displays.
@@ -73,6 +93,12 @@ final class Renderer: NSObject, MTKViewDelegate {
     private let pilePipeline: MTLRenderPipelineState
     private let signPipeline: MTLRenderPipelineState
     private let pumpkinPipeline: MTLRenderPipelineState
+    private let garlandPipeline: MTLRenderPipelineState
+    private let ballPipeline: MTLRenderPipelineState
+    private let frostPipeline: MTLRenderPipelineState
+    private var frostPattern: MTLTexture?
+    private var frostWipe: MTLTexture?
+    private var frostVersion = -1
     /// Drops on the glass: their bumps added up into a field, and the glass drawn from it.
     private let fieldPipeline: MTLRenderPipelineState
     private let glassPipeline: MTLRenderPipelineState
@@ -105,13 +131,16 @@ final class Renderer: NSObject, MTKViewDelegate {
         self.pilePipeline = pipelines.pile
         self.signPipeline = pipelines.sign
         self.pumpkinPipeline = pipelines.pumpkin
+        self.garlandPipeline = pipelines.garland
+        self.ballPipeline = pipelines.ball
+        self.frostPipeline = pipelines.frost
         self.glassPipeline = pipelines.glass
         self.fieldPipeline = pipelines.field
         super.init()
     }
 
     private struct Pipelines {
-        let sprite, pile, sign, pumpkin, glass, field: MTLRenderPipelineState
+        let sprite, pile, sign, pumpkin, garland, ball, frost, glass, field: MTLRenderPipelineState
     }
 
     private struct PipelineKey: Hashable {
@@ -156,6 +185,9 @@ final class Renderer: NSObject, MTKViewDelegate {
             pile: pipeline("pileVertex", "pileFragment"),
             sign: pipeline("signVertex", "signFragment"),
             pumpkin: pipeline("pumpkinVertex", "pumpkinFragment"),
+            garland: pipeline("garlandVertex", "garlandFragment"),
+            ball: pipeline("ballVertex", "ballFragment"),
+            frost: pipeline("frostVertex", "frostFragment"),
             glass: pipeline("glassVertex", "glassFragment"),
             field: device.makeRenderPipelineState(descriptor: field)
         )
@@ -239,10 +271,11 @@ final class Renderer: NSObject, MTKViewDelegate {
         }
         simulation.setBorrowed(borrowedSnow())
         let cursor = cursorLocation()
+        simulation.pointerDown = pointerDown()
         let changed = simulation.step(dt: dt, cursor: cursor)
         stepped()
         // The frame shown last stays up, as it would anyway with nothing to draw, without ticking over in vain.
-        if !changed && simulation.isEmpty {
+        if !changed && simulation.isEmpty && !simulation.decorAnimates {
             rest()
             return
         }
@@ -261,7 +294,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         if view.preferredFramesPerSecond != pace { view.preferredFramesPerSecond = pace }
         idleFrames = changed || lanternMoved ? 0 : idleFrames + 1
         // A still pile only needs a slow refresh for its glints.
-        guard changed || lanternMoved || ((simulation.hasSnow || !simulation.pumpkins.isEmpty) && idleFrames % 2 == 0) else { return }
+        guard changed || lanternMoved || ((simulation.hasSnow || !simulation.pumpkins.isEmpty || simulation.decorAnimates) && idleFrames % 2 == 0) else { return }
 
         semaphore.wait()
         guard let pass = view.currentRenderPassDescriptor,
@@ -323,7 +356,9 @@ final class Renderer: NSObject, MTKViewDelegate {
         if !simulation.hasGlassDrops { field = nil }
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else { return }
         drawPumpkins(pumpkins, with: encoder, uniforms: uniforms)
+        drawBalls(simulation.snowmen.sprites(clock: simulation.clockNow), with: encoder, uniforms: uniforms)
         drawPiles(piles.filter { !$0.isDock }, with: encoder, uniforms: uniforms, heights: heightBuffer)
+        drawGarlands(simulation.garlands(), with: encoder, uniforms: uniforms)
         drawSigns(simulation.signs, with: encoder, uniforms: uniforms)
         if sprites > 0 {
             encoder.setRenderPipelineState(spritePipeline)
@@ -340,6 +375,7 @@ final class Renderer: NSObject, MTKViewDelegate {
             encoder.setScissorRect(scissor)
             encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         }
+        drawFrost(with: encoder, uniforms: uniforms)
         encoder.endEncoding()
         encodeDock(piles.filter(\.isDock), into: commandBuffer, uniforms: uniforms, heights: heightBuffer)
     }
@@ -430,6 +466,80 @@ final class Renderer: NSObject, MTKViewDelegate {
             encoder.setFragmentBytes(&occluders, length: occluders.count * MemoryLayout<SIMD4<Float>>.stride, index: 2)
             encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
         }
+    }
+
+    private func drawGarlands(_ garlands: [GarlandSprite], with encoder: MTLRenderCommandEncoder, uniforms: Uniforms) {
+        guard !garlands.isEmpty else { return }
+        var uniforms = uniforms
+        encoder.setRenderPipelineState(garlandPipeline)
+        encoder.setVertexBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 1)
+        encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 1)
+        for garland in garlands {
+            var shape = GarlandUniforms(anchor: garland.anchor, width: garland.width, seed: garland.seed, coverCount: Float(garland.covers.count), depth: 48)
+            var covers = garland.covers.isEmpty ? [SIMD4<Float>(repeating: 0)] : garland.covers
+            encoder.setVertexBytes(&shape, length: MemoryLayout<GarlandUniforms>.stride, index: 0)
+            encoder.setFragmentBytes(&shape, length: MemoryLayout<GarlandUniforms>.stride, index: 0)
+            encoder.setFragmentBytes(&covers, length: covers.count * MemoryLayout<SIMD4<Float>>.stride, index: 2)
+            encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+        }
+    }
+
+    /// The balls of snow go down before the snow, so the drift they sit in covers their bottoms.
+    private func drawBalls(_ balls: [BallSprite], with encoder: MTLRenderCommandEncoder, uniforms: Uniforms) {
+        guard !balls.isEmpty else { return }
+        var uniforms = uniforms
+        encoder.setRenderPipelineState(ballPipeline)
+        encoder.setVertexBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 1)
+        encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 1)
+        for ball in balls {
+            var shape = BallUniforms(center: ball.center, radius: ball.radius, seed: ball.seed, roll: ball.roll, role: ball.role, pop: ball.pop)
+            encoder.setVertexBytes(&shape, length: MemoryLayout<BallUniforms>.stride, index: 0)
+            encoder.setFragmentBytes(&shape, length: MemoryLayout<BallUniforms>.stride, index: 0)
+            encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+        }
+    }
+
+    private func drawFrost(with encoder: MTLRenderCommandEncoder, uniforms: Uniforms) {
+        let frost = simulation.frost
+        guard frost.active, let textures = frostTextures(frost) else { return }
+        var uniforms = uniforms
+        var state = SIMD4<Float>(frost.progress, 0, 0, 0)
+        encoder.setRenderPipelineState(frostPipeline)
+        encoder.setFragmentTexture(textures.pattern, index: 0)
+        encoder.setFragmentTexture(textures.wipe, index: 1)
+        encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 1)
+        encoder.setFragmentBytes(&state, length: MemoryLayout<SIMD4<Float>>.stride, index: 2)
+        encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+    }
+
+    /// The frost's pattern and the glass wiped clear, uploaded when they change.
+    private func frostTextures(_ frost: Frost) -> (pattern: MTLTexture, wipe: MTLTexture)? {
+        if frostVersion != frost.patternVersion || frostPattern == nil {
+            guard !frost.pattern.isEmpty else { return nil }
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rg8Unorm, width: frost.width, height: frost.height, mipmapped: false)
+            descriptor.usage = .shaderRead
+            guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
+            frost.pattern.withUnsafeBytes {
+                texture.replace(region: MTLRegionMake2D(0, 0, frost.width, frost.height), mipmapLevel: 0, withBytes: $0.baseAddress!, bytesPerRow: frost.width * 2)
+            }
+            frostPattern = texture
+            frostVersion = frost.patternVersion
+            frostWipe = nil
+        }
+        if frostWipe == nil || frostWipe!.width != frost.wipeWidth || frostWipe!.height != frost.wipeHeight {
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r8Unorm, width: frost.wipeWidth, height: frost.wipeHeight, mipmapped: false)
+            descriptor.usage = .shaderRead
+            frostWipe = device.makeTexture(descriptor: descriptor)
+            frost.markWipeStale()
+        }
+        if frost.wipeDirty, let wipe = frostWipe {
+            frost.wipe.withUnsafeBytes {
+                wipe.replace(region: MTLRegionMake2D(0, 0, frost.wipeWidth, frost.wipeHeight), mipmapLevel: 0, withBytes: $0.baseAddress!, bytesPerRow: frost.wipeWidth)
+            }
+            frost.acknowledgeWipe()
+        }
+        guard let pattern = frostPattern, let wipe = frostWipe else { return nil }
+        return (pattern, wipe)
     }
 
     private func drawSigns(_ signs: [SignSprite], with encoder: MTLRenderCommandEncoder, uniforms: Uniforms) {

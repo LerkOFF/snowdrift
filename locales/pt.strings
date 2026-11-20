@@ -70,3 +70,9 @@
 "setup.failed" = "Não foi possível instalar: {error}.";
 "setup.retry" = "Tentar de novo";
 "plow" = "Chamar o limpa-neves";
+"newyear" = "Ano Novo";
+"newyear.all" = "Tudo de uma vez";
+"garland" = "Luzes nas janelas";
+"snowmen" = "Bonecos de neve";
+"frost" = "Geada";
+"snowmen.clear" = "Remover bonecos de neve";

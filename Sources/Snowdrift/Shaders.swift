@@ -1264,4 +1264,273 @@ fragment float4 pumpkinFragment(PumpkinOut in [[stage_in]], texture2d<float> she
     float halo = u.lantern.w * 0.3 * flame * exp(-dot(d, d));
     return color + float4(candle * halo, halo) * (1.0 - color.a);
 }
+
+// MARK: Winter decorations
+
+static float fxHash(float2 p) {
+    return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+}
+
+static float fxNoise(float2 p) {
+    float2 i = floor(p);
+    float2 f = fract(p);
+    float a = fxHash(i);
+    float b = fxHash(i + float2(1.0, 0.0));
+    float c = fxHash(i + float2(0.0, 1.0));
+    float d = fxHash(i + float2(1.0, 1.0));
+    float2 w = f * f * (3.0 - 2.0 * f);
+    return mix(mix(a, b, w.x), mix(c, d, w.x), w.y);
+}
+
+static float fxSegment(float2 p, float2 a, float2 b, thread float &along) {
+    float2 pa = p - a;
+    float2 ba = b - a;
+    along = saturate(dot(pa, ba) / dot(ba, ba));
+    return length(pa - ba * along);
+}
+
+/// `top` laid over `under`, both premultiplied.
+static float4 fxOver(float4 top, float4 under) {
+    return top + under * (1.0 - top.a);
+}
+
+struct GarlandUniforms {
+    float2 anchor;
+    float width;
+    float seed;
+    float coverCount;
+    float depth;
+};
+
+struct GarlandOut {
+    float4 position [[position]];
+    float2 local;
+    float2 world;
+};
+
+constant float3 garlandColors[5] = {
+    float3(1.0, 0.16, 0.12), float3(1.0, 0.72, 0.16), float3(0.22, 0.92, 0.34), float3(0.26, 0.56, 1.0), float3(1.0, 0.32, 0.82)
+};
+
+/// A quad along a window's top edge; `local` runs along the edge and down from it.
+vertex GarlandOut garlandVertex(uint vid [[vertex_id]], constant GarlandUniforms &g [[buffer(0)]], constant Uniforms &u [[buffer(1)]]) {
+    float2 corner = float2(float(vid & 1), float(vid >> 1));
+    float2 local = float2(mix(-6.0, g.width + 6.0, corner.x), mix(-10.0, g.depth, corner.y));
+    float2 world = float2(g.anchor.x + local.x, g.anchor.y - local.y);
+    GarlandOut out;
+    out.position = float4((world + u.shake.xy) / u.viewSize * 2.0 - 1.0, 0.0, 1.0);
+    out.local = local;
+    out.world = world;
+    return out;
+}
+
+fragment float4 garlandFragment(GarlandOut in [[stage_in]], constant GarlandUniforms &g [[buffer(0)]], constant Uniforms &u [[buffer(1)]],
+                                constant float4 *covers [[buffer(2)]]) {
+    for (int k = 0; k < int(g.coverCount); k++) {
+        float4 o = covers[k];
+        if (in.world.x >= o.x && in.world.x < o.z && in.world.y >= o.y && in.world.y < o.w) discard_fragment();
+    }
+    float2 p = in.local;
+    const float inset = 9.0;
+    float usable = max(g.width - 2.0 * inset, 20.0);
+    float count = max(1.0, round(usable / 130.0));
+    float span = usable / count;
+    float lx = p.x - inset;
+    if (lx < -5.0 || lx > usable + 5.0) discard_fragment();
+    float k = clamp(floor(lx / span), 0.0, count - 1.0);
+    float t = clamp((lx - k * span) / span, 0.0, 1.0);
+    float sag = span * 0.12 + 3.0;
+    float rise = 2.5;
+    float wire = rise + sag * 4.0 * t * (1.0 - t);
+    float slope = sag * 4.0 * (1.0 - 2.0 * t) / span;
+    float away = (p.y - wire) / sqrt(1.0 + slope * slope);
+    float wireA = saturate(1.15 - abs(away)) * 0.92;
+
+    float bulbs = max(1.0, round(span / 21.0));
+    // The bulbs are evenly spaced all along the string, so the glow of one carries over from span to span.
+    float gap = span / bulbs;
+    float first = floor(lx / gap);
+    float total = count * bulbs;
+    float3 glow = float3(0.0);
+    float4 sockets = float4(0.0);
+    float4 lamps = float4(0.0);
+    float nightly = 1.0 - dot(u.light.rgb, float3(0.3333));
+    for (int dj = -1; dj <= 1; dj++) {
+        float j = first + float(dj);
+        if (j < 0.0 || j > total - 1.0) continue;
+        float bx = inset + (j + 0.5) * gap;
+        float spanIndex = floor(j / bulbs);
+        float tb = (bx - inset - spanIndex * span) / span;
+        float wy = rise + sag * 4.0 * tb * (1.0 - tb);
+        float index = j;
+        float3 tint = garlandColors[min(int(fxHash(float2(index, g.seed * 91.0)) * 5.0), 4)];
+        float phase = fxHash(float2(index + 11.0, g.seed * 7.0)) * 6.2832;
+        float level = 0.5 + 0.5 * sin(u.time * 2.3 + phase + index * 0.7);
+        level = 0.3 + 0.7 * level * level;
+        float2 d = p - float2(bx, wy + 6.2);
+        glow += tint * exp(-dot(d, d) / 130.0) * 0.34 * level * (1.0 + 1.2 * nightly);
+        float2 sd = abs(p - float2(bx, wy + 2.4)) - float2(1.25, 1.6);
+        float socket = saturate(0.5 - max(sd.x, sd.y));
+        sockets = fxOver(float4(float3(0.10, 0.13, 0.11) * socket, socket), sockets);
+        float2 q = d / float2(3.0, 4.4);
+        float rr = length(q);
+        float body = saturate((1.0 - rr) * 3.2);
+        float3 lit = tint * (0.45 + 0.75 * level) + float3(0.55 * level * saturate(1.0 - rr * 1.4));
+        lit += float3(0.5) * saturate(1.0 - length(q - float2(-0.38, -0.4)) * 4.0);
+        lamps = fxOver(float4(min(lit, float3(1.0)) * body, body), lamps);
+    }
+    float4 color = float4(glow, 0.0);
+    color = fxOver(float4(float3(0.07, 0.17, 0.12) * wireA, wireA), color);
+    color = fxOver(sockets, color);
+    color = fxOver(lamps, color);
+    return color;
+}
+
+struct BallUniforms {
+    float2 center;
+    float radius;
+    float seed;
+    float roll;
+    float role;
+    float pop;
+    float pad;
+};
+
+struct BallOut {
+    float4 position [[position]];
+    float2 local;
+};
+
+/// A quad reaching past the ball on every side for a snowman's arms and nose.
+vertex BallOut ballVertex(uint vid [[vertex_id]], constant BallUniforms &b [[buffer(0)]], constant Uniforms &u [[buffer(1)]]) {
+    float2 corner = float2(float(vid & 1), float(vid >> 1));
+    float2 local = (corner * 2.0 - 1.0) * 2.4;
+    float2 world = b.center + local * b.radius;
+    BallOut out;
+    out.position = float4((world + u.shake.xy) / u.viewSize * 2.0 - 1.0, 0.0, 1.0);
+    out.local = local;
+    return out;
+}
+
+static float4 ballPart(float4 under, float3 color, float cover) {
+    return fxOver(float4(color * cover, cover), under);
+}
+
+fragment float4 ballFragment(BallOut in [[stage_in]], constant BallUniforms &b [[buffer(0)]], constant Uniforms &u [[buffer(1)]]) {
+    float2 l = in.local;
+    float pixel = 1.0 / (b.radius * max(u.scale, 1.0));
+    float d = length(l);
+    float4 result = float4(0.0);
+    float edge = saturate((1.0 - d) / pixel + 0.5);
+    if (edge > 0.0) {
+        float z = sqrt(max(0.0, 1.0 - d * d));
+        float3 n = normalize(float3(l.x, l.y, z + 0.0001));
+        float3 toward = normalize(float3(-0.5, 0.65, 0.6));
+        float diffuse = saturate(dot(n, toward));
+        float cr = cos(b.roll);
+        float sr = sin(b.roll);
+        float2 g = float2(l.x * cr - l.y * sr, l.x * sr + l.y * cr);
+        float lump = fxNoise(g * (4.0 + b.radius * 0.06) + b.seed * 40.0) * 0.6 + fxNoise(g * 13.0 + b.seed * 9.0) * 0.4;
+        diffuse = saturate(diffuse + (lump - 0.5) * 0.24);
+        float3 shade = mix(float3(0.70, 0.77, 0.88), u.shadowTint.rgb, u.shadowTint.a);
+        float3 lit = mix(float3(0.945, 0.955, 0.975), min(u.shadowTint.rgb * 1.18, float3(1.0)), u.shadowTint.a * 0.2);
+        float3 color = mix(shade, lit, smoothstep(0.05, 0.85, diffuse));
+        color = mix(color, float3(0.985, 0.99, 1.0), pow(saturate(dot(n, toward)), 6.0) * 0.35);
+        color = mix(color, float3(0.78, 0.86, 0.98), pow(1.0 - z, 3.0) * 0.18 * saturate(0.4 - n.y));
+        color += (fxHash(floor(in.position.xy)) - 0.5) * 0.02;
+        color *= u.light.rgb;
+        color = mix(color, u.rim.rgb, u.rim.a * pow(1.0 - z, 2.0) * 0.5);
+        result = float4(color * edge, edge);
+    }
+
+    float s = 1.0 + 0.5 * b.pop;
+    float3 coal = float3(0.06, 0.06, 0.08) * mix(float3(1.0), u.light.rgb, 0.6);
+    float3 twig = float3(0.36, 0.22, 0.12) * mix(float3(1.0), u.light.rgb, 0.6);
+    if (b.role > 1.5) {
+        // The head: eyes, a carrot nose, a smile of coal and a scarf.
+        float band = 0.10 * (1.0 - min(l.x * l.x, 1.0));
+        float scarf = saturate((l.y + 0.80 + band) / pixel + 0.5) * saturate((-0.56 - band - l.y) / pixel + 0.5) * edge;
+        float stripe = step(0.5, fract((l.x + 1.0) * 5.5));
+        float3 wool = mix(float3(0.82, 0.10, 0.14), float3(0.96, 0.95, 0.96), stripe) * mix(float3(1.0), u.light.rgb, 0.7);
+        result = ballPart(result, wool, scarf);
+        float2 tail = abs(l - float2(0.37, -0.83)) - float2(0.10, 0.22);
+        result = ballPart(result, mix(float3(0.82, 0.10, 0.14), float3(0.96, 0.95, 0.96), step(0.5, fract(l.y * 5.5))) * mix(float3(1.0), u.light.rgb, 0.7),
+                          saturate(0.5 - max(tail.x, tail.y) / pixel));
+        for (int e = 0; e < 2; e++) {
+            float2 c = float2(e == 0 ? -0.30 : 0.30, 0.22);
+            result = ballPart(result, coal, saturate((0.085 * s - length(l - c)) / pixel + 0.5));
+        }
+        for (int m = 0; m < 5; m++) {
+            float dm = float(m - 2);
+            float2 c = float2(dm * 0.15, -0.34 + 0.05 * dm * dm * 0.55);
+            result = ballPart(result, coal, saturate((0.042 * s - length(l - c)) / pixel + 0.5));
+        }
+        float along;
+        float2 base = float2(0.04, 0.0);
+        float2 tip = float2(0.78 * s, -0.10);
+        float dn = fxSegment(l, base, tip, along);
+        float carrot = saturate((mix(0.10, 0.0, along) - dn) / pixel + 0.5);
+        float3 orange = float3(0.97, 0.55, 0.12) * (0.82 + 0.3 * saturate((l.y - mix(0.0, -0.10, along)) / 0.1 + 0.5)) * mix(float3(1.0), u.light.rgb, 0.7);
+        result = ballPart(result, orange, carrot);
+    } else if (b.role > 0.5) {
+        // The body: three coal buttons and two twig arms.
+        for (int k = 0; k < 3; k++) {
+            float2 c = float2(0.0, 0.45 - 0.40 * float(k));
+            result = ballPart(result, coal, saturate((0.085 * s - length(l - c)) / pixel + 0.5));
+        }
+        float along;
+        float arm = fxSegment(l, float2(-0.82, 0.12), float2(-2.05, 0.78), along);
+        float cover = saturate((0.05 - arm) / pixel + 0.5);
+        arm = fxSegment(l, float2(-1.5, 0.50), float2(-1.62, 0.98), along);
+        cover = max(cover, saturate((0.04 - arm) / pixel + 0.5));
+        arm = fxSegment(l, float2(0.82, 0.10), float2(2.0, 0.62), along);
+        cover = max(cover, saturate((0.05 - arm) / pixel + 0.5));
+        arm = fxSegment(l, float2(1.55, 0.38), float2(1.78, 0.90), along);
+        cover = max(cover, saturate((0.04 - arm) / pixel + 0.5));
+        result = ballPart(result, twig, cover);
+    }
+    if (result.a < 0.002) discard_fragment();
+    return result;
+}
+
+struct FrostOut {
+    float4 position [[position]];
+    float2 uv;
+};
+
+vertex FrostOut frostVertex(uint vid [[vertex_id]]) {
+    float2 corner = float2(float(vid & 1), float(vid >> 1));
+    FrostOut out;
+    out.position = float4(corner * 2.0 - 1.0, 0.0, 1.0);
+    out.uv = float2(corner.x, 1.0 - corner.y);
+    return out;
+}
+
+/// The frost over the whole screen: ferns grown out from the edges as far as `progress` says, a haze thickest at the
+/// edges, and the glass wiped clear where the pointer has been.
+fragment float4 frostFragment(FrostOut in [[stage_in]], texture2d<float> pattern [[texture(0)]], texture2d<float> wipe [[texture(1)]],
+                              constant Uniforms &u [[buffer(1)]], constant float4 &frost [[buffer(2)]]) {
+    constexpr sampler smooth(filter::linear, address::clamp_to_edge);
+    float2 uv = in.uv;
+    float2 fern = pattern.sample(smooth, uv).rg;
+    float cleared = wipe.sample(smooth, uv).r;
+    float progress = frost.x;
+    float grown = saturate((progress * 1.3 - fern.g) / 0.1);
+    float edgeDistance = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+    float2 px = uv * u.viewSize;
+    float mist = 0.55 * fxNoise(px / 90.0 + 3.0) + 0.45 * fxNoise(px / 28.0 + 11.0);
+    float haze = saturate(progress * 1.1) * (0.05 + 0.2 * smoothstep(0.5, 0.0, edgeDistance)) * (0.4 + 0.9 * mist);
+    float body = fern.r * grown;
+    float alpha = 1.0 - (1.0 - body * 0.86) * (1.0 - haze);
+    float3 color = mix(float3(0.80, 0.90, 0.99), float3(1.0), saturate(body * 1.3));
+    float seed = fxHash(floor(px * 0.5) + 17.3);
+    if (seed > 0.985 && body > 0.3) {
+        color = mix(color, float3(1.0), pow(saturate(sin(u.time * (0.8 + seed * 1.5) + seed * 80.0)), 18.0));
+    }
+    float rim = 4.0 * cleared * (1.0 - cleared) * saturate(progress * 2.0);
+    alpha = max(alpha * (1.0 - cleared), rim * 0.22);
+    color *= mix(float3(1.0), u.light.rgb, 0.6);
+    if (alpha < 0.002) discard_fragment();
+    return float4(color * alpha, alpha);
+}
 """

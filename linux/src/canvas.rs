@@ -32,6 +32,34 @@ impl Canvas {
         px[3] = (a * 255.0 + px[3] as f32 * keep + 0.5) as u8;
     }
 
+    /// Source-over of a premultiplied colour (red, green, blue, alpha, each 0 to 1).
+    #[inline]
+    pub fn over(&mut self, x: i32, y: i32, c: [f32; 4]) {
+        if x < 0 || y < 0 || x >= self.width as i32 || y >= self.height as i32 || c[3] <= 0.0 {
+            return;
+        }
+        let i = (y as usize * self.width + x as usize) * 4;
+        let keep = 1.0 - c[3].min(1.0);
+        let px = &mut self.pixels[i..i + 4];
+        px[0] = (c[2].min(1.0) * 255.0 + px[0] as f32 * keep + 0.5).min(255.0) as u8;
+        px[1] = (c[1].min(1.0) * 255.0 + px[1] as f32 * keep + 0.5).min(255.0) as u8;
+        px[2] = (c[0].min(1.0) * 255.0 + px[2] as f32 * keep + 0.5).min(255.0) as u8;
+        px[3] = (c[3].min(1.0) * 255.0 + px[3] as f32 * keep + 0.5).min(255.0) as u8;
+    }
+
+    /// Source-over of a whole picture of the same size (premultiplied BGRA) that has mostly nothing in it.
+    pub fn over_layer(&mut self, layer: &[u8]) {
+        for (dst, src) in self.pixels.chunks_exact_mut(4).zip(layer.chunks_exact(4)) {
+            if src[3] == 0 {
+                continue;
+            }
+            let keep = 255 - src[3] as u32;
+            for k in 0..4 {
+                dst[k] = (src[k] as u32 + (dst[k] as u32 * keep + 127) / 255).min(255) as u8;
+            }
+        }
+    }
+
     /// A soft round dot: full in the middle, fading to nothing at `radius`; `soft` of one fades from the centre.
     pub fn dot(&mut self, cx: f32, cy: f32, radius: f32, soft: f32, rgb_core: [f32; 3], rgb_edge: [f32; 3], alpha: f32) {
         let reach = radius + 1.0;

@@ -64,6 +64,8 @@ pub struct SnowLayer {
     pub occluders: Vec<[f32; 4]>,
     /// How far the window it lies on reaches down from its top edge: as far as a drop can run down it.
     pub face: f32,
+    /// A window that only carries decorations: no snow settles on it.
+    pub decor_only: bool,
     /// Windows in front of any part of the window it lies on, which hide a drop running down it.
     pub face_occluders: Vec<[f32; 4]>,
     /// Rain's spray on the window's glass, and the film running drops leave on it.
@@ -131,6 +133,7 @@ impl SnowLayer {
             bed_depth: 0.0,
             occluders: Vec::new(),
             face: 200.0,
+            decor_only: false,
             face_occluders: Vec::new(),
             spray: Vec::new(),
             film: Vec::new(),

@@ -1,6 +1,8 @@
 //! The snow itself, free of any platform: the simulation, its drifts and the geometry they use.
 //! The Mac app has its own in Swift, and the site its own in JavaScript.
 
+pub mod decor;
+pub mod festive;
 pub mod geometry;
 pub mod halloween;
 pub mod layer;

@@ -70,3 +70,9 @@
 "setup.failed" = "インストールできませんでした：{error}。";
 "setup.retry" = "再試行";
 "plow" = "除雪車を呼ぶ";
+"newyear" = "お正月";
+"newyear.all" = "まとめてオン";
+"garland" = "ウィンドウのイルミネーション";
+"snowmen" = "雪だるま";
+"frost" = "霜";
+"snowmen.clear" = "雪だるまを片付ける";

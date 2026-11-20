@@ -33,6 +33,9 @@ enum Preferences {
     private static let panelsKey = "snowOnPanels"
     private static let halloweenKey = "halloweenOn"
     private static let halloweenSkippedKey = "halloweenSkipped"
+    private static let garlandKey = "garlandOn"
+    private static let snowmenKey = "snowmenOn"
+    private static let frostKey = "frostOn"
     private static let modeKey = "mode"
     private static let mixedKey = "mixed"
     private static let mixKey = "mix"
@@ -63,6 +66,9 @@ enum Preferences {
             panelsKey: false,
             halloweenKey: false,
             halloweenSkippedKey: 0,
+            garlandKey: false,
+            snowmenKey: false,
+            frostKey: false,
             autumnKey: false,
             mixedKey: false,
             fallingOpacityKey: 1.0,
@@ -148,6 +154,24 @@ enum Preferences {
     static var halloween: Bool {
         get { defaults.bool(forKey: halloweenKey) }
         set { defaults.set(newValue, forKey: halloweenKey) }
+    }
+
+    /// A string of lights along the top of every window.
+    static var garland: Bool {
+        get { defaults.bool(forKey: garlandKey) }
+        set { defaults.set(newValue, forKey: garlandKey) }
+    }
+
+    /// Snowballs to roll up out of the snow and stack into snowmen.
+    static var snowmen: Bool {
+        get { defaults.bool(forKey: snowmenKey) }
+        set { defaults.set(newValue, forKey: snowmenKey) }
+    }
+
+    /// Frost growing in from the edges of the screen.
+    static var frost: Bool {
+        get { defaults.bool(forKey: frostKey) }
+        set { defaults.set(newValue, forKey: frostKey) }
     }
 
     /// The year whose Halloween was turned off from the menu, zero for none.

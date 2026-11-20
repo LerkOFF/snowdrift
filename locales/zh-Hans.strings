@@ -70,3 +70,9 @@
 "setup.failed" = "无法安装：{error}。";
 "setup.retry" = "重试";
 "plow" = "呼叫扫雪车";
+"newyear" = "新年";
+"newyear.all" = "全部开启";
+"garland" = "窗口彩灯";
+"snowmen" = "雪人";
+"frost" = "霜";
+"snowmen.clear" = "清除雪人";

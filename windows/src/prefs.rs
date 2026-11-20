@@ -35,6 +35,12 @@ pub struct Settings {
     pub deep_interaction: bool,
     /// The snow also settles on dialogs and big pictures inside windows, read through UI Automation.
     pub panels: bool,
+    /// A string of lights along the top of every window.
+    pub garland: bool,
+    /// Balls of snow to roll up and stack into snowmen.
+    pub snowmen: bool,
+    /// Frost creeping in from the edges of the screen, wiped by the pointer.
+    pub frost: bool,
     pub welcomed: bool,
     /// Unix seconds of the first run, or 0 for an install older than the stamp.
     pub installed_at: u32,
@@ -76,6 +82,9 @@ impl Settings {
             show_in_screenshots: read(w!("showInScreenshots")).is_some_and(|v| v != 0),
             deep_interaction: read(w!("deepInteraction")).is_some_and(|v| v != 0),
             panels: read(w!("snowOnPanels")).is_some_and(|v| v != 0),
+            garland: read(w!("garlandOn")).is_some_and(|v| v != 0),
+            snowmen: read(w!("snowmenOn")).is_some_and(|v| v != 0),
+            frost: read(w!("frostOn")).is_some_and(|v| v != 0),
             welcomed,
             installed_at,
             halloween: Choice { on: read(w!("halloweenOn")).is_some_and(|v| v != 0), skipped: read(w!("halloweenSkipped")).unwrap_or(0) },
@@ -96,6 +105,9 @@ impl Settings {
         write(w!("showInScreenshots"), self.show_in_screenshots as u32);
         write(w!("deepInteraction"), self.deep_interaction as u32);
         write(w!("snowOnPanels"), self.panels as u32);
+        write(w!("garlandOn"), self.garland as u32);
+        write(w!("snowmenOn"), self.snowmen as u32);
+        write(w!("frostOn"), self.frost as u32);
         write(w!("welcomed"), self.welcomed as u32);
         write(w!("installedAt"), self.installed_at);
         write(w!("halloweenOn"), self.halloween.on as u32);

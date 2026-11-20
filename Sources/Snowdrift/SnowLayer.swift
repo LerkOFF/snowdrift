@@ -42,6 +42,8 @@ final class SnowLayer {
     var faceOccluders: [SIMD4<Float>] = []
     /// Lies on the Dock's shelf, and so is drawn below the Dock.
     var isDock = false
+    /// A window that only carries decorations: no snow settles on it.
+    var decorOnly = false
     /// How far the window it lies on reaches down from its top edge: as far as a drop can run down it.
     var face: Float = 200
     /// Rain's spray on the window's glass: each droplet from the left end of its top edge, and how big it is.

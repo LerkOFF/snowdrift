@@ -284,9 +284,19 @@ impl Display {
         Ok(())
     }
 
-    pub fn pointer(&self) -> Option<(i32, i32)> {
+    /// Where the pointer is and whether the primary button is down.
+    pub fn pointer_state(&self) -> Option<(i32, i32, bool)> {
         let reply = self.conn.query_pointer(self.root).ok()?.reply().ok()?;
-        Some((reply.root_x as i32, reply.root_y as i32))
+        let down = u16::from(reply.mask) & u16::from(xproto::KeyButMask::BUTTON1) != 0;
+        Some((reply.root_x as i32, reply.root_y as i32, down))
+    }
+
+    /// Lets the overlay take the clicks (while the pointer is on a ball of snow) or pass them through again.
+    pub fn catch_clicks(&self, overlay: &Overlay, width: u32, height: u32, catch: bool) -> Result<()> {
+        let rectangles = if catch { vec![xproto::Rectangle { x: 0, y: 0, width: width as u16, height: height as u16 }] } else { Vec::new() };
+        self.conn.shape_rectangles(shape::SO::SET, shape::SK::INPUT, xproto::ClipOrdering::UNSORTED, overlay.window, 0, 0, &rectangles)?;
+        self.conn.flush()?;
+        Ok(())
     }
 
     /// Whether anything the windows depend on changed since the last call, without blocking.

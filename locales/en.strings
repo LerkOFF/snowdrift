@@ -78,3 +78,9 @@
 "setup.failed" = "Couldn't install: {error}.";
 "setup.retry" = "Try Again";
 "plow" = "Call the snowplow";
+"newyear" = "New Year";
+"newyear.all" = "All at once";
+"garland" = "Window lights";
+"snowmen" = "Snowmen";
+"frost" = "Frost";
+"snowmen.clear" = "Clear snowmen";

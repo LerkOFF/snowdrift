@@ -25,6 +25,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var clearItem: NSMenuItem!
     private var plowItem: NSMenuItem!
     private var halloweenItem: NSMenuItem!
+    private var newYearItem: NSMenuItem!
+    private var garlandItem: NSMenuItem!
+    private var snowmenItem: NSMenuItem!
+    private var frostItem: NSMenuItem!
+    private var clearSnowmenItem: NSMenuItem!
     private var mixedItem: NSMenuItem!
     private var modeItems: [(item: NSMenuItem, mode: Mode)] = []
     private var maxPerformanceItem: NSMenuItem!
@@ -189,6 +194,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         modes.addItem(.separator())
         halloweenItem = add(tr("halloween"), #selector(toggleHalloween), to: modes)
         menu.addItem(withTitle: tr("mode"), action: nil, keyEquivalent: "").submenu = modes
+        let festive = NSMenu()
+        festive.autoenablesItems = false
+        newYearItem = toggle(tr("newyear.all"), #selector(toggleNewYear), to: festive)
+        festive.addItem(.separator())
+        garlandItem = toggle(tr("garland"), #selector(toggleGarland), to: festive)
+        snowmenItem = toggle(tr("snowmen"), #selector(toggleSnowmen), to: festive)
+        frostItem = toggle(tr("frost"), #selector(toggleFrost), to: festive)
+        festive.addItem(.separator())
+        clearSnowmenItem = add(tr("snowmen.clear"), #selector(clearSnowmen), to: festive)
+        menu.addItem(withTitle: tr("newyear"), action: nil, keyEquivalent: "").submenu = festive
         clearItem = add(tr("clear.snow"), #selector(clearSnow), to: menu)
         plowItem = add(tr("plow"), #selector(callPlow), to: menu)
         menu.addItem(.separator())
@@ -262,6 +277,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         panelsItem.state = Preferences.panels ? .on : .off
         panelsItem.isEnabled = surfaces.contains(.windows)
         clearItem.isEnabled = screens.contains { $0.simulation.hasSnow || $0.simulation.spriteCount > 0 }
+        let festiveOn = [Preferences.garland, Preferences.snowmen, Preferences.frost]
+        newYearItem.state = festiveOn.allSatisfy { $0 } ? .on : .off
+        garlandItem.state = Preferences.garland ? .on : .off
+        snowmenItem.state = Preferences.snowmen ? .on : .off
+        frostItem.state = Preferences.frost ? .on : .off
+        clearSnowmenItem.isEnabled = screens.contains { !$0.simulation.snowmen.isEmpty }
         halloweenItem.state = Halloween.isWanted ? .on : .off
         halloweenItem.isEnabled = modes == [.snow]
         maxPerformanceItem.state = Preferences.maxPerformance ? .on : .off
@@ -306,6 +327,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func togglePanels() {
         Preferences.panels.toggle()
         Panels.enabled = Preferences.panels
+    }
+
+    private func applyFestive() {
+        for snow in screens {
+            snow.simulation.garland = Preferences.garland
+            snow.simulation.snowmen.enabled = Preferences.snowmen
+            snow.simulation.frost.enabled = Preferences.frost
+            snow.decorationsChanged()
+        }
+        if let menu = statusItem.menu {
+            menuNeedsUpdate(menu)
+            menu.items.forEach { $0.view?.needsDisplay = true }
+            menu.items.compactMap(\.submenu).forEach { submenu in submenu.items.forEach { $0.view?.needsDisplay = true } }
+        }
+    }
+
+    /// The whole winter set at once: on unless all of it already is.
+    @objc private func toggleNewYear() {
+        let all = Preferences.garland && Preferences.snowmen && Preferences.frost
+        Preferences.garland = !all
+        Preferences.snowmen = !all
+        Preferences.frost = !all
+        applyFestive()
+    }
+
+    @objc private func toggleGarland() {
+        Preferences.garland.toggle()
+        applyFestive()
+    }
+
+    @objc private func toggleSnowmen() {
+        Preferences.snowmen.toggle()
+        applyFestive()
+    }
+
+    @objc private func toggleFrost() {
+        Preferences.frost.toggle()
+        applyFestive()
+    }
+
+    @objc private func clearSnowmen() {
+        for snow in screens { snow.simulation.clearSnowmen() }
+        snowmenItem.view?.needsDisplay = true
     }
 
     @objc private func callPlow() {

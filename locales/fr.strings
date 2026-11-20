@@ -70,3 +70,9 @@
 "setup.failed" = "Installation impossible : {error}.";
 "setup.retry" = "Réessayer";
 "plow" = "Appeler le chasse-neige";
+"newyear" = "Nouvel An";
+"newyear.all" = "Tout à la fois";
+"garland" = "Guirlandes aux fenêtres";
+"snowmen" = "Bonshommes de neige";
+"frost" = "Givre";
+"snowmen.clear" = "Retirer les bonshommes de neige";

@@ -1236,3 +1236,11 @@ float4 pumpkinFragment(PumpkinOut i) : SV_Target {
     float halo = lantern.w * 0.3 * flame * exp(-dot(d, d));
     return color + float4(candle * halo, halo) * (1.0 - color.a);
 }
+
+// The winter decorations: the garlands, the snowmen and the frost, made on the processor into a picture of the
+// display (premultiplied, same size as the swap chain) that is laid over everything.
+Texture2D<float4> decor : register(t5);
+
+float4 decorFragment(GlassOut i) : SV_Target {
+    return decor.Load(int3(int2(i.position.xy), 0));
+}

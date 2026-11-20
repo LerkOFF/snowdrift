@@ -65,6 +65,14 @@ pub enum Command {
     ClearSnow(bool),
     /// Sends the snowplow along the ground of every display.
     CallPlow,
+    /// The windows' lights, the snowmen or the frost turned on or off.
+    Garland(bool),
+    Snowmen(bool),
+    Frost(bool),
+    /// All three at once.
+    NewYear(bool),
+    /// Bursts every snowman and ball.
+    ClearSnowmen,
     /// Halloween turned on or off from the menu.
     Halloween(Choice),
     /// Other kinds fall, once a gust has blown what is there away; when calm, for less motion, it melts where it
@@ -160,6 +168,44 @@ fn run_loop(commands: &Receiver<Command>, links: &Links, mut settings: Settings)
                         screen.simulation.accumulates = accumulates;
                     });
                 }
+                Command::Garland(on) => {
+                    settings.garland = on;
+                    screens.iter_mut().for_each(|screen| {
+                        screen.simulation.garland = on;
+                        screen.resync_windows();
+                        screen.wake(Clock::now());
+                    });
+                }
+                Command::Snowmen(on) => {
+                    settings.snowmen = on;
+                    screens.iter_mut().for_each(|screen| {
+                        screen.simulation.snowmen.set_enabled(on);
+                        screen.wake(Clock::now());
+                    });
+                }
+                Command::Frost(on) => {
+                    settings.frost = on;
+                    screens.iter_mut().for_each(|screen| {
+                        screen.simulation.frost.set_enabled(on);
+                        screen.wake(Clock::now());
+                    });
+                }
+                Command::NewYear(on) => {
+                    settings.garland = on;
+                    settings.snowmen = on;
+                    settings.frost = on;
+                    screens.iter_mut().for_each(|screen| {
+                        screen.simulation.garland = on;
+                        screen.simulation.snowmen.set_enabled(on);
+                        screen.simulation.frost.set_enabled(on);
+                        screen.resync_windows();
+                        screen.wake(Clock::now());
+                    });
+                }
+                Command::ClearSnowmen => screens.iter_mut().for_each(|screen| {
+                    screen.simulation.clear_snowmen();
+                    screen.wake(Clock::now());
+                }),
                 Command::Melt(on) => {
                     settings.melt = on;
                     screens.iter_mut().for_each(|screen| screen.simulation.thaws = on);
@@ -168,9 +214,15 @@ fn run_loop(commands: &Receiver<Command>, links: &Links, mut settings: Settings)
                     settings.snow_on_windows = on;
                     crate::panels::set_enabled(on && settings.panels);
                     let accumulates = settings.accumulates();
-                    screens.iter_mut().for_each(|screen| screen.simulation.accumulates = accumulates);
+                    screens.iter_mut().for_each(|screen| {
+                        screen.simulation.accumulates = accumulates;
+                        screen.simulation.window_snow = on;
+                    });
+                    // The windows are still followed for their lights, but what lay on them goes.
                     if !on {
                         screens.iter_mut().for_each(Screen::drop_window_snow);
+                    } else {
+                        screens.iter_mut().for_each(Screen::resync_windows);
                     }
                 }
                 Command::BehindWindows(on) => {
@@ -373,7 +425,7 @@ fn run_loop(commands: &Receiver<Command>, links: &Links, mut settings: Settings)
                 }
             }
             // Behind the windows the snow still settles on them: what lies on a window's top edge is above it, in plain view.
-            let windows = settings.snow_on_windows.then_some(&tracker);
+            let windows = (settings.snow_on_windows || settings.garland).then_some(&tracker);
             lend(&mut screens, windows, now + clock.tolerance());
             let time = (clock.seconds(now - started) % 1000.0) as f32;
             let lending: Vec<bool> = (0..screens.len())
@@ -731,6 +783,10 @@ fn new_simulation(monitor: &Monitor, settings: &Settings) -> SnowSimulation {
     simulation.auto_plow = true;
     simulation.ground_settles = settings.ground;
     simulation.falling_opacity = settings.opacity as f32 / 100.0;
+    simulation.garland = settings.garland;
+    simulation.window_snow = settings.snow_on_windows;
+    simulation.snowmen.set_enabled(settings.snowmen);
+    simulation.frost.set_enabled(settings.frost);
     simulation.set_snowfall_held(!settings.welcomed);
     simulation.set_halloween(halloween::shows(settings));
     simulation.set_modes(&settings.picked.modes());

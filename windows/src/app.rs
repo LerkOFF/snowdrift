@@ -64,6 +64,11 @@ const ID_MIXED: u32 = 219;
 const ID_GROUND: u32 = 220;
 const ID_OPACITY_FOLD: u32 = 221;
 const ID_PANELS: u32 = 222;
+const ID_NEWYEAR: u32 = 223;
+const ID_GARLAND: u32 = 224;
+const ID_SNOWMEN: u32 = 225;
+const ID_FROST: u32 = 226;
+const ID_CLEAR_SNOWMEN: u32 = 227;
 /// Opacity from 10% up in steps of 5%: `ID_OPACITY` + the step.
 const ID_OPACITY: u32 = 400;
 const OPACITY_STEPS: u32 = 19;
@@ -457,6 +462,19 @@ fn entries(settings: &Settings, login: bool, sliders: bool) -> Vec<Entry> {
     };
     entries.extend(accumulate(settings, !heaps.is_empty(), sliders));
     entries.push(Entry::Submenu { label: tr("mode").to_string(), entries: modes });
+    let all = settings.garland && settings.snowmen && settings.frost;
+    entries.push(Entry::Submenu {
+        label: tr("newyear").to_string(),
+        entries: vec![
+            Entry::toggle(ID_NEWYEAR, tr("newyear.all"), all, true),
+            Entry::Separator,
+            Entry::toggle(ID_GARLAND, tr("garland"), settings.garland, true),
+            Entry::toggle(ID_SNOWMEN, tr("snowmen"), settings.snowmen, true),
+            Entry::toggle(ID_FROST, tr("frost"), settings.frost, true),
+            Entry::Separator,
+            Entry::item(ID_CLEAR_SNOWMEN, tr("snowmen.clear"), false, settings.snowmen),
+        ],
+    });
     if !heaps.is_empty() {
         entries.push(Entry::item(ID_CLEAR, text::kinds("clear", &heaps), false, true));
     }
@@ -563,6 +581,11 @@ fn choose(window: HWND, chosen: u32, login: bool) {
                 send(app, Command::ClearSnow(!prefs::animations_enabled()));
             }
         }),
+        ID_CLEAR_SNOWMEN => APP.with_borrow(|app| {
+            if let Some(app) = app {
+                send(app, Command::ClearSnowmen);
+            }
+        }),
         ID_ACCUMULATE => ACCUMULATE_OPEN.set(!ACCUMULATE_OPEN.get()),
         ID_OPACITY_FOLD => OPACITY_OPEN.set(!OPACITY_OPEN.get()),
         ID_LOGIN => {
@@ -640,6 +663,25 @@ fn choose(window: HWND, chosen: u32, login: bool) {
                 ID_PANELS => {
                     settings.panels = !settings.panels;
                     Command::Panels(settings.panels)
+                }
+                ID_NEWYEAR => {
+                    let on = !(settings.garland && settings.snowmen && settings.frost);
+                    settings.garland = on;
+                    settings.snowmen = on;
+                    settings.frost = on;
+                    Command::NewYear(on)
+                }
+                ID_GARLAND => {
+                    settings.garland = !settings.garland;
+                    Command::Garland(settings.garland)
+                }
+                ID_SNOWMEN => {
+                    settings.snowmen = !settings.snowmen;
+                    Command::Snowmen(settings.snowmen)
+                }
+                ID_FROST => {
+                    settings.frost = !settings.frost;
+                    Command::Frost(settings.frost)
                 }
                 ID_MAX_PERFORMANCE => {
                     settings.max_performance = !settings.max_performance;
