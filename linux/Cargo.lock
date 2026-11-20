@@ -558,7 +558,7 @@ version = "0.0.0"
 
 [[package]]
 name = "snowdrift-linux"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "snowdrift-core",
  "x11rb",
