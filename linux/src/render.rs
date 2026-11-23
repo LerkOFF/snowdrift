@@ -54,25 +54,20 @@ impl Frame {
     }
 }
 
-/// The strings of lights along the windows' top edges. `height` is the canvas height in pixels: the simulation's y
+/// The string of lights along the top of the screen. `height` is the canvas height in pixels: the simulation's y
 /// runs up from the bottom of the display.
 fn draw_garlands(canvas: &mut Canvas, simulation: &SnowSimulation, scale: f32, height: f32, time: f32) {
     for garland in simulation.garlands() {
-        let x0 = ((garland.anchor.x - 6.0) * scale).floor().max(0.0) as i32;
-        let x1 = (((garland.anchor.x + garland.width + 6.0) * scale).ceil() as i32).min(canvas.width as i32);
+        let x0 = ((garland.anchor.x - 4.0) * scale).floor().max(0.0) as i32;
+        let x1 = (((garland.anchor.x + garland.width + 4.0) * scale).ceil() as i32).min(canvas.width as i32);
         let top = height - garland.anchor.y * scale;
         let y0 = (top - GARLAND_ABOVE * scale).floor().max(0.0) as i32;
         let y1 = ((top + GARLAND_DEPTH * scale).ceil() as i32).min(canvas.height as i32);
         for py in y0..y1 {
             for px in x0..x1 {
-                // In points from the left end and the top edge of the window.
+                // In points from the left end and the top the string hangs from.
                 let (lx, ly) = ((px as f32 + 0.5) / scale - garland.anchor.x, (py as f32 + 0.5 - top) / scale);
-                // What a window in front hides, in the simulation's coordinates.
-                let (sx, sy) = ((px as f32 + 0.5) / scale, (height - py as f32 - 0.5) / scale);
-                if garland.covers.iter().any(|c| sx >= c[0] && sx <= c[2] && sy >= c[1] && sy <= c[3]) {
-                    continue;
-                }
-                canvas.over(px, py, garland_pixel(lx, ly, garland.width, garland.seed, time));
+                canvas.over(px, py, garland_pixel(lx, ly, garland.width, garland.seed, time, &garland.angles, &garland.lifts));
             }
         }
     }

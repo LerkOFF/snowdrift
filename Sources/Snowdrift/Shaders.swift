@@ -1298,81 +1298,103 @@ struct GarlandUniforms {
     float2 anchor;
     float width;
     float seed;
-    float coverCount;
+    float count;
     float depth;
 };
 
 struct GarlandOut {
     float4 position [[position]];
     float2 local;
-    float2 world;
 };
 
 constant float3 garlandColors[5] = {
     float3(1.0, 0.16, 0.12), float3(1.0, 0.72, 0.16), float3(0.22, 0.92, 0.34), float3(0.26, 0.56, 1.0), float3(1.0, 0.32, 0.82)
 };
 
-/// A quad along a window's top edge; `local` runs along the edge and down from it.
+constant float bulbDrop = 11.5;
+
+struct GarlandShape {
+    float spans;
+    float span;
+    float gap;
+    float total;
+};
+
+static GarlandShape garlandShape(float width) {
+    GarlandShape g;
+    g.spans = max(1.0, round(width / 150.0));
+    g.span = max(width, 40.0) / g.spans;
+    float bulbs = max(1.0, round(g.span / 21.0));
+    g.gap = g.span / bulbs;
+    g.total = g.spans * bulbs;
+    return g;
+}
+
+/// How far the wire is pulled down at x: the lifts of the two bulbs either side of it.
+static float garlandLift(float x, GarlandShape g, constant float *lifts) {
+    float u = x / g.gap - 0.5;
+    float j = floor(u);
+    float f = u - j;
+    float a = j < 0.0 || j > g.total - 1.0 ? 0.0 : lifts[int(j)];
+    float b = j + 1.0 < 0.0 || j + 1.0 > g.total - 1.0 ? 0.0 : lifts[int(j) + 1];
+    return a * (1.0 - f) + b * f;
+}
+
+static float2 garlandWire(float x, GarlandShape g, constant float *lifts) {
+    float k = clamp(floor(x / g.span), 0.0, g.spans - 1.0);
+    float t = clamp((x - k * g.span) / g.span, 0.0, 1.0);
+    float sag = g.span * 0.12 + 3.0 + garlandLift(x, g, lifts);
+    return float2(1.0 + sag * 4.0 * t * (1.0 - t), sag * 4.0 * (1.0 - 2.0 * t) / g.span);
+}
+
+/// A quad along the top of the screen; `local` runs along the string and down from where it hangs.
 vertex GarlandOut garlandVertex(uint vid [[vertex_id]], constant GarlandUniforms &g [[buffer(0)]], constant Uniforms &u [[buffer(1)]]) {
     float2 corner = float2(float(vid & 1), float(vid >> 1));
-    float2 local = float2(mix(-6.0, g.width + 6.0, corner.x), mix(-10.0, g.depth, corner.y));
+    float2 local = float2(mix(-4.0, g.width + 4.0, corner.x), mix(-4.0, g.depth, corner.y));
     float2 world = float2(g.anchor.x + local.x, g.anchor.y - local.y);
     GarlandOut out;
     out.position = float4((world + u.shake.xy) / u.viewSize * 2.0 - 1.0, 0.0, 1.0);
     out.local = local;
-    out.world = world;
     return out;
 }
 
 fragment float4 garlandFragment(GarlandOut in [[stage_in]], constant GarlandUniforms &g [[buffer(0)]], constant Uniforms &u [[buffer(1)]],
-                                constant float4 *covers [[buffer(2)]]) {
-    for (int k = 0; k < int(g.coverCount); k++) {
-        float4 o = covers[k];
-        if (in.world.x >= o.x && in.world.x < o.z && in.world.y >= o.y && in.world.y < o.w) discard_fragment();
-    }
+                                constant float *angles [[buffer(2)]], constant float *lifts [[buffer(3)]]) {
     float2 p = in.local;
-    const float inset = 9.0;
-    float usable = max(g.width - 2.0 * inset, 20.0);
-    float count = max(1.0, round(usable / 130.0));
-    float span = usable / count;
-    float lx = p.x - inset;
-    if (lx < -5.0 || lx > usable + 5.0) discard_fragment();
-    float k = clamp(floor(lx / span), 0.0, count - 1.0);
-    float t = clamp((lx - k * span) / span, 0.0, 1.0);
-    float sag = span * 0.12 + 3.0;
-    float rise = 2.5;
-    float wire = rise + sag * 4.0 * t * (1.0 - t);
-    float slope = sag * 4.0 * (1.0 - 2.0 * t) / span;
-    float away = (p.y - wire) / sqrt(1.0 + slope * slope);
+    GarlandShape layout = garlandShape(g.width);
+    float2 wireAt = garlandWire(p.x, layout, lifts);
+    float away = (p.y - wireAt.x) / sqrt(1.0 + wireAt.y * wireAt.y);
     float wireA = saturate(1.15 - abs(away)) * 0.92;
 
-    float bulbs = max(1.0, round(span / 21.0));
-    // The bulbs are evenly spaced all along the string, so the glow of one carries over from span to span.
-    float gap = span / bulbs;
-    float first = floor(lx / gap);
-    float total = count * bulbs;
+    float first = floor(p.x / layout.gap);
     float3 glow = float3(0.0);
+    float4 cords = float4(0.0);
     float4 sockets = float4(0.0);
     float4 lamps = float4(0.0);
     float nightly = 1.0 - dot(u.light.rgb, float3(0.3333));
     for (int dj = -1; dj <= 1; dj++) {
         float j = first + float(dj);
-        if (j < 0.0 || j > total - 1.0) continue;
-        float bx = inset + (j + 0.5) * gap;
-        float spanIndex = floor(j / bulbs);
-        float tb = (bx - inset - spanIndex * span) / span;
-        float wy = rise + sag * 4.0 * tb * (1.0 - tb);
-        float index = j;
-        float3 tint = garlandColors[min(int(fxHash(float2(index, g.seed * 91.0)) * 5.0), 4)];
-        float phase = fxHash(float2(index + 11.0, g.seed * 7.0)) * 6.2832;
-        float level = 0.5 + 0.5 * sin(u.time * 2.3 + phase + index * 0.7);
+        if (j < 0.0 || j > layout.total - 1.0) continue;
+        float bx = (j + 0.5) * layout.gap;
+        float wy = garlandWire(bx, layout, lifts).x;
+        float theta = angles[int(j)];
+        float sn = sin(theta);
+        float cs = cos(theta);
+        float2 d = p - float2(bx, wy);
+        // The bulb's own axes: down along its cord, and across it.
+        float2 l = float2(d.x * cs - d.y * sn, d.x * sn + d.y * cs);
+        float3 tint = garlandColors[min(int(fxHash(float2(j, g.seed * 91.0)) * 5.0), 4)];
+        float phase = fxHash(float2(j + 11.0, g.seed * 7.0)) * 6.2832;
+        float level = 0.5 + 0.5 * sin(u.time * 2.3 + phase + j * 0.7);
         level = 0.3 + 0.7 * level * level;
-        float2 d = p - float2(bx, wy + 6.2);
-        glow += tint * exp(-dot(d, d) / 130.0) * 0.34 * level * (1.0 + 1.2 * nightly);
-        float2 sd = abs(p - float2(bx, wy + 2.4)) - float2(1.25, 1.6);
+        float2 gd = p - float2(bx + bulbDrop * sn, wy + bulbDrop * cs);
+        glow += tint * exp(-dot(gd, gd) / 130.0) * 0.34 * level * (1.0 + 1.2 * nightly);
+        float cord = saturate(0.95 - abs(l.x) * 1.6) * saturate(l.y + 0.5) * saturate(bulbDrop - 4.6 - l.y);
+        cords = fxOver(float4(float3(0.05, 0.13, 0.09) * cord, cord * 0.9), cords);
+        float2 sd = abs(float2(l.x, l.y - (bulbDrop - 3.8))) - float2(1.25, 1.6);
         float socket = saturate(0.5 - max(sd.x, sd.y));
         sockets = fxOver(float4(float3(0.10, 0.13, 0.11) * socket, socket), sockets);
-        float2 q = d / float2(3.0, 4.4);
+        float2 q = float2(l.x / 3.0, (l.y - bulbDrop) / 4.4);
         float rr = length(q);
         float body = saturate((1.0 - rr) * 3.2);
         float3 lit = tint * (0.45 + 0.75 * level) + float3(0.55 * level * saturate(1.0 - rr * 1.4));
@@ -1381,6 +1403,7 @@ fragment float4 garlandFragment(GarlandOut in [[stage_in]], constant GarlandUnif
     }
     float4 color = float4(glow, 0.0);
     color = fxOver(float4(float3(0.07, 0.17, 0.12) * wireA, wireA), color);
+    color = fxOver(cords, color);
     color = fxOver(sockets, color);
     color = fxOver(lamps, color);
     return color;

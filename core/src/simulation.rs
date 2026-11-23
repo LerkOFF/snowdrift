@@ -4,7 +4,7 @@ use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use std::hash::{BuildHasher, Hasher};
 use std::ops::Range;
 
-use crate::festive::{Frost, GarlandSprite, Probe, Snowmen, Terrain};
+use crate::festive::{Frost, Garland, GarlandSprite, Probe, Snowmen, Terrain};
 use crate::geometry::{Rect, V2, smoothstep};
 use crate::layer::{Blend, SnowLayer};
 
@@ -495,8 +495,13 @@ pub struct SnowSimulation {
     plow_check_at: f64,
     /// Whether the plow comes out by itself once the ground snow gets deep; the app turns it on.
     pub auto_plow: bool,
-    /// A string of lights along the top of every window.
+    /// A string of lights along the top of the screen.
     pub garland: bool,
+    /// How the bulbs swing when the pointer brushes them.
+    pub lights: Garland,
+    /// Where the string hangs from, in points above the bottom of the screen: the top of it, unless the platform puts a
+    /// bar there.
+    pub garland_top: Option<f32>,
     /// Snow settles on windows; if not, the windows carry decorations only.
     pub window_snow: bool,
     /// The primary mouse button is down.
@@ -549,6 +554,8 @@ impl SnowSimulation {
             plow_check_at: 0.0,
             auto_plow: false,
             garland: false,
+            lights: Garland::default(),
+            garland_top: None,
             window_snow: true,
             pointer_down: false,
             snowmen: Snowmen::default(),
@@ -577,6 +584,7 @@ impl SnowSimulation {
             },
         };
         simulation.frost.resize(width, height);
+        simulation.lights.resize(width);
         simulation.update_target();
         simulation
     }
@@ -736,12 +744,12 @@ impl SnowSimulation {
 
     /// Decorations that change on their own: lights twinkling, snowmen being handled.
     pub fn decor_animates(&self) -> bool {
-        self.garland && self.layers.len() > 1 || !self.snowmen.is_empty()
+        self.garland || !self.snowmen.is_empty()
     }
 
     /// Anything of the winter decorations that moves or must be drawn on its own.
     pub fn decorates(&self) -> bool {
-        self.garland && self.layers.len() > 1 || !self.snowmen.is_empty() || self.frost.active()
+        self.garland || !self.snowmen.is_empty() || self.frost.active()
     }
 
     pub fn sprite_count(&self) -> usize {
@@ -770,6 +778,7 @@ impl SnowSimulation {
         }
         self.layers[0].resize(column_count(width));
         self.frost.resize(width, height);
+        self.lights.resize(width);
         self.width = width;
         self.height = height;
         self.air.jolt_scale = jolt_scale(height);
@@ -919,7 +928,8 @@ impl SnowSimulation {
             || air.clock - air.last_cursor_push < 0.3
             || air.gust.is_some()
             || self.haunting.pushing(air.clock)
-            || air.clock - self.snowmen.moved_at < 0.4;
+            || air.clock - self.snowmen.moved_at < 0.4
+            || self.garland && air.clock - self.lights.moved_at < 0.4;
         // The steady trickle off window corners is a few tiny grains at a time; they read fine at the calm rate.
         let flying = air.grains.len() > 24 || air.clock < self.scattered_until || air.slide_wind.abs() > 20.0;
         self.pace = if pushed {
@@ -1314,6 +1324,12 @@ impl SnowSimulation {
         if self.frost.step(dt, pointer, clock) {
             changed = true;
         }
+        if self.garland {
+            let top = self.garland_top.unwrap_or(self.height);
+            if self.lights.step(dt, pointer, top, clock) {
+                changed = true;
+            }
+        }
         changed
     }
 
@@ -1348,20 +1364,12 @@ impl SnowSimulation {
         0
     }
 
-    /// The window edges the garlands hang from.
+    /// The string of lights along the top of the screen.
     pub fn garlands(&self) -> Vec<GarlandSprite> {
         if !self.garland {
             return Vec::new();
         }
-        let mut result = Vec::new();
-        for (li, layer) in self.layers.iter().enumerate().skip(1) {
-            let id = self.ids[li];
-            if Some(id) == self.shelf || layer.width() < 110.0 {
-                continue;
-            }
-            result.push(GarlandSprite { anchor: layer.origin, width: layer.width(), seed: id.rem_euclid(997) as f32 / 997.0, covers: layer.face_occluders.clone() });
-        }
-        result
+        vec![self.lights.sprite(self.garland_top.unwrap_or(self.height))]
     }
 
     pub fn clock(&self) -> f64 {

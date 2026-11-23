@@ -1656,20 +1656,88 @@ fn frost_grows_from_the_edges_and_the_pointer_wipes_it() {
 }
 
 #[test]
-fn garlands_hang_on_windows_wide_enough_and_light_up() {
+fn the_garland_hangs_from_the_top_of_the_screen_and_lights_up() {
+    let mut simulation = SnowSimulation::new(1280.0, 800.0, 0.0);
+    assert!(simulation.garlands().is_empty());
+    simulation.garland = true;
+    let garlands = simulation.garlands();
+    assert_eq!(garlands.len(), 1, "one string along the screen, whatever windows are open");
+    assert_eq!(garlands[0].width, 1280.0);
+    assert_eq!(garlands[0].anchor.y, 800.0);
+    let lit = (0..1280).flat_map(|x| (0..62).map(move |y| (x, y))).filter(|&(x, y)| crate::festive::garland_pixel(x as f32, y as f32, 1280.0, 0.3, 1.0, &garlands[0].angles, &garlands[0].lifts)[3] > 0.5).count();
+    assert!(lit > 1500, "{lit} opaque pixels of wire and bulbs");
+}
+
+#[test]
+fn the_pointer_sets_the_bulbs_swinging_and_they_settle_again() {
     let mut simulation = SnowSimulation::new(1280.0, 800.0, 0.0);
     simulation.garland = true;
-    simulation.window_snow = false;
-    simulation.update_windows(&[surface(7, 100.0, 600.0, 500.0), surface(8, 700.0, 500.0, 60.0)], 0.016, &HashSet::new(), &HashSet::new(), false);
-    let garlands = simulation.garlands();
-    assert_eq!(garlands.len(), 1, "only the wide window carries one");
-    assert_eq!(garlands[0].width, 500.0);
-    let lit = (0..500).flat_map(|x| (0..48).map(move |y| (x, y))).filter(|&(x, y)| crate::festive::garland_pixel(x as f32, y as f32, 500.0, 0.3, 1.0)[3] > 0.5).count();
-    assert!(lit > 300, "{lit} opaque pixels of wire and bulbs");
-    // With no snow settling on windows, none lands on this one.
-    simulation.set_intensity(0.9);
-    run(&mut simulation, 40.0, AWAY);
-    assert!(piles(&simulation).iter().skip(1).all(|p| p.1 < 1.0), "{:?}", piles(&simulation));
+    let layout = crate::festive::garland_layout(1280.0);
+    assert_eq!(simulation.lights.angles.len(), layout.total);
+    // The pointer sweeps along the string where the bulbs hang.
+    let mut x = 300.0;
+    for _ in 0..40 {
+        x += 14.0;
+        simulation.step(1.0 / 60.0, V2::new(x, 800.0 - 24.0));
+    }
+    let swing = simulation.lights.angles.iter().fold(0.0f32, |m, a| m.max(a.abs()));
+    assert!(swing > 0.25, "the bulbs swung {swing} radians");
+    let far = simulation.lights.angles[0].abs() + simulation.lights.angles[layout.total - 1].abs();
+    assert!(far < 0.05, "the ends hardly stirred: {far}");
+    // The pointer leaves: the swinging dies away, and the picture stops being redone for it.
+    for _ in 0..60 * 20 {
+        simulation.step(1.0 / 60.0, AWAY);
+    }
+    assert!(simulation.lights.angles.iter().all(|a| a.abs() < 0.01));
+    assert!(simulation.lights.lifts.iter().all(|a| a.abs() < 0.05));
+}
+
+#[test]
+fn a_ball_let_go_of_at_speed_flies_and_bursts_where_it_lands() {
+    let mut simulation = SnowSimulation::new(1280.0, 800.0, 0.0);
+    simulation.snowmen.set_enabled(true);
+    simulation.snowmen.balls.push(throwable(1, 200.0, 300.0, 700.0, 500.0));
+    for _ in 0..120 {
+        simulation.step(1.0 / 60.0, AWAY);
+    }
+    assert!(simulation.snowmen.balls.is_empty(), "the ball burst on landing: {:?}", simulation.snowmen.balls);
+    // One that was only let go of gently stays.
+    simulation.snowmen.balls.push(throwable(2, 600.0, 300.0, 0.0, 0.0));
+    for _ in 0..120 {
+        simulation.step(1.0 / 60.0, AWAY);
+    }
+    assert_eq!(simulation.snowmen.balls.len(), 1);
+}
+
+#[test]
+fn a_thrown_ball_bursts_on_the_side_of_the_screen() {
+    let mut simulation = SnowSimulation::new(1280.0, 800.0, 0.0);
+    simulation.snowmen.set_enabled(true);
+    simulation.snowmen.balls.push(throwable(1, 1200.0, 500.0, 1800.0, 300.0));
+    let mut steps = 0;
+    while !simulation.snowmen.balls.is_empty() && steps < 60 {
+        simulation.step(1.0 / 60.0, AWAY);
+        steps += 1;
+    }
+    assert!(simulation.snowmen.balls.is_empty() && steps < 30, "burst on the wall after {steps} steps");
+}
+
+fn throwable(id: u32, x: f32, y: f32, vx: f32, vy: f32) -> crate::festive::Ball {
+    crate::festive::Ball {
+        id,
+        pos: V2::new(x, y),
+        vel: V2::new(vx, vy),
+        mass: crate::festive::mass_of(14.0),
+        support: None,
+        seed: 0.5,
+        roll: 0.0,
+        settled: 0.0,
+        airborne: true,
+        gone: false,
+        adorned: None,
+        thrown: vx.abs() + vy.abs() > 100.0,
+        flight: 0.0,
+    }
 }
 
 #[test]
@@ -1680,7 +1748,6 @@ fn the_decor_layer_redoes_only_what_changed() {
     simulation.window_snow = false;
     simulation.frost.duration = 4.0;
     simulation.frost.set_enabled(true);
-    simulation.update_windows(&[surface(7, 100.0, 300.0, 300.0)], 0.016, &HashSet::new(), &HashSet::new(), false);
     let mut layer = DecorLayer::new(640, 400, 1.0);
     let first = layer.update(&mut simulation, 0.0);
     assert_eq!(first, vec![[0, 0, 640, 400]]);

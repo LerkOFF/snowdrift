@@ -302,7 +302,7 @@ Turn on compositing in your desktop's settings, or start one (for example `picom
         }
 
         // The windows: read about thirty times a second, and handed to the snow when they moved.
-        if (settings.snow_on_windows || settings.garland) && now.duration_since(windows_at) >= Duration::from_millis(33) {
+        if settings.snow_on_windows && now.duration_since(windows_at) >= Duration::from_millis(33) {
             windows_at = now;
             let fresh = display.clients();
             // The process in front tells the panel reader whose tree to look at.
@@ -333,7 +333,7 @@ Turn on compositing in your desktop's settings, or start one (for example `picom
                 }
                 known = open;
             }
-        } else if !(settings.snow_on_windows || settings.garland) && !known.is_empty() {
+        } else if !settings.snow_on_windows && !known.is_empty() {
             known.clear();
             clients.clear();
             for screen in &mut screens {

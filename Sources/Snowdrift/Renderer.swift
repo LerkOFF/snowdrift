@@ -38,7 +38,7 @@ struct GarlandUniforms {
     var anchor: SIMD2<Float>
     var width: Float
     var seed: Float
-    var coverCount: Float
+    var count: Float
     var depth: Float
 }
 
@@ -475,11 +475,13 @@ final class Renderer: NSObject, MTKViewDelegate {
         encoder.setVertexBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 1)
         encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 1)
         for garland in garlands {
-            var shape = GarlandUniforms(anchor: garland.anchor, width: garland.width, seed: garland.seed, coverCount: Float(garland.covers.count), depth: 48)
-            var covers = garland.covers.isEmpty ? [SIMD4<Float>(repeating: 0)] : garland.covers
+            var shape = GarlandUniforms(anchor: garland.anchor, width: garland.width, seed: garland.seed, count: Float(garland.angles.count), depth: garlandDepth)
+            var angles = garland.angles.isEmpty ? [0] : garland.angles
+            var lifts = garland.lifts.isEmpty ? [0] : garland.lifts
             encoder.setVertexBytes(&shape, length: MemoryLayout<GarlandUniforms>.stride, index: 0)
             encoder.setFragmentBytes(&shape, length: MemoryLayout<GarlandUniforms>.stride, index: 0)
-            encoder.setFragmentBytes(&covers, length: covers.count * MemoryLayout<SIMD4<Float>>.stride, index: 2)
+            encoder.setFragmentBytes(&angles, length: angles.count * MemoryLayout<Float>.stride, index: 2)
+            encoder.setFragmentBytes(&lifts, length: lifts.count * MemoryLayout<Float>.stride, index: 3)
             encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
         }
     }

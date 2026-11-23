@@ -112,7 +112,7 @@ impl DecorLayer {
     fn garland_area(&self, garland: &GarlandSprite) -> Option<Pixels> {
         let (s, h) = (self.scale, self.height as f32);
         let top = h - garland.anchor.y * s;
-        self.clip((garland.anchor.x - 6.0) * s, top - GARLAND_ABOVE * s, (garland.anchor.x + garland.width + 6.0) * s, top + GARLAND_DEPTH * s)
+        self.clip((garland.anchor.x - 4.0) * s, top - GARLAND_ABOVE * s, (garland.anchor.x + garland.width + 4.0) * s, top + GARLAND_DEPTH * s)
     }
 
     fn ball_area(&self, ball: &BallSprite) -> Option<Pixels> {
@@ -129,11 +129,8 @@ impl DecorLayer {
         let (x0, y0, x1, y1) = (own[0].max(area[0]), own[1].max(area[1]), own[2].min(area[2]), own[3].min(area[3]));
         for py in y0..y1 {
             for px in x0..x1 {
-                let (sx, sy) = ((px as f32 + 0.5) / s, (h - py as f32 - 0.5) / s);
-                if garland.covers.iter().any(|c| sx >= c[0] && sx <= c[2] && sy >= c[1] && sy <= c[3]) {
-                    continue;
-                }
-                let c = garland_pixel(sx - garland.anchor.x, (py as f32 + 0.5 - top) / s, garland.width, garland.seed, time);
+                let sx = (px as f32 + 0.5) / s;
+                let c = garland_pixel(sx - garland.anchor.x, (py as f32 + 0.5 - top) / s, garland.width, garland.seed, time, &garland.angles, &garland.lifts);
                 put(&mut self.pixels, (py * self.width + px) * 4, c);
             }
         }

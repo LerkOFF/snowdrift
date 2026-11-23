@@ -6,23 +6,70 @@ use crate::geometry::V2;
 
 // MARK: Garland
 
-/// A string of lights hung along the top edge of a window.
+/// A string of lights hung along the top of the screen, from posts at both ends and between, its bulbs swinging when
+/// the pointer brushes them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GarlandSprite {
-    /// The left end of the window's top edge.
+    /// Where the string hangs from: the left end, at the top of the screen (or under the menu bar).
     pub anchor: V2,
     pub width: f32,
     pub seed: f32,
-    /// Frames of windows in front of it, left, bottom, right, top.
-    pub covers: Vec<[f32; 4]>,
+    /// How far each bulb has swung from straight down, in radians, positive towards the right.
+    pub angles: Vec<f32>,
+    /// How far the wire is pulled down at each bulb, in points.
+    pub lifts: Vec<f32>,
 }
 
-/// How far below the top edge a garland reaches, in points.
-pub const GARLAND_DEPTH: f32 = 48.0;
+/// How far below the top a garland reaches, in points.
+pub const GARLAND_DEPTH: f32 = 62.0;
 /// How far above it the quad it is drawn in starts.
-pub const GARLAND_ABOVE: f32 = 10.0;
+pub const GARLAND_ABOVE: f32 = 4.0;
+/// How far from the wire the middle of a bulb hangs.
+pub const BULB_DROP: f32 = 11.5;
 
 const GARLAND_COLORS: [[f32; 3]; 5] = [[1.0, 0.16, 0.12], [1.0, 0.72, 0.16], [0.22, 0.92, 0.34], [0.26, 0.56, 1.0], [1.0, 0.32, 0.82]];
+/// The widest a bulb may swing.
+const SWING_LIMIT: f32 = 1.25;
+const WIRE_RISE: f32 = 1.0;
+
+/// How a garland of a width is divided into swags between posts, and the swags into bulbs.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GarlandLayout {
+    pub spans: f32,
+    pub span: f32,
+    pub gap: f32,
+    pub total: usize,
+}
+
+pub fn garland_layout(width: f32) -> GarlandLayout {
+    let spans = (width / 150.0).round().max(1.0);
+    let span = width.max(40.0) / spans;
+    let bulbs = (span / 21.0).round().max(1.0);
+    GarlandLayout { spans, span, gap: span / bulbs, total: (spans * bulbs) as usize }
+}
+
+/// How far the wire is pulled down at x: the lifts of the two bulbs either side of it.
+fn lift_at(x: f32, layout: &GarlandLayout, lifts: &[f32]) -> f32 {
+    if lifts.is_empty() {
+        return 0.0;
+    }
+    let u = x / layout.gap - 0.5;
+    let j = u.floor();
+    let f = u - j;
+    let at = |k: f32| if k < 0.0 { 0.0 } else { lifts.get(k as usize).copied().unwrap_or(0.0) };
+    at(j) * (1.0 - f) + at(j + 1.0) * f
+}
+
+/// The wire's depth below the top of the screen at x, and its slope there. The lift deepens the swag, so the wire
+/// stays pinned at the posts.
+fn wire_at(x: f32, layout: &GarlandLayout, lifts: &[f32]) -> (f32, f32) {
+    let k = (x / layout.span).floor().clamp(0.0, layout.spans - 1.0);
+    let t = ((x - k * layout.span) / layout.span).clamp(0.0, 1.0);
+    let sag = layout.span * 0.12 + 3.0 + lift_at(x, layout, lifts);
+    let y = WIRE_RISE + sag * 4.0 * t * (1.0 - t);
+    let slope = sag * 4.0 * (1.0 - 2.0 * t) / layout.span;
+    (y, slope)
+}
 
 fn fx_hash(x: f32, y: f32) -> f32 {
     let v = (x * 127.1 + y * 311.7).sin() * 43758.5453;
@@ -51,54 +98,48 @@ fn saturate(x: f32) -> f32 {
     x.clamp(0.0, 1.0)
 }
 
-/// One pixel of a garland, premultiplied: `x` along the window's top edge from its left end, `y` down from it.
-pub fn garland_pixel(x: f32, y: f32, width: f32, seed: f32, time: f32) -> [f32; 4] {
-    const INSET: f32 = 9.0;
-    let usable = (width - 2.0 * INSET).max(20.0);
-    let count = (usable / 130.0).round().max(1.0);
-    let span = usable / count;
-    let lx = x - INSET;
-    if lx < -5.0 || lx > usable + 5.0 {
+/// One pixel of a garland, premultiplied: `x` along the string from its left end, `y` down from the top it hangs from.
+pub fn garland_pixel(x: f32, y: f32, width: f32, seed: f32, time: f32, angles: &[f32], lifts: &[f32]) -> [f32; 4] {
+    let layout = garland_layout(width);
+    if x < -4.0 || x > width + 4.0 {
         return [0.0; 4];
     }
-    let k = (lx / span).floor().clamp(0.0, count - 1.0);
-    let t = ((lx - k * span) / span).clamp(0.0, 1.0);
-    let sag = span * 0.12 + 3.0;
-    let rise = 2.5;
-    let wire = rise + sag * 4.0 * t * (1.0 - t);
-    let slope = sag * 4.0 * (1.0 - 2.0 * t) / span;
+    let (wire, slope) = wire_at(x, &layout, lifts);
     let away = (y - wire) / (1.0 + slope * slope).sqrt();
     let wire_a = saturate(1.15 - away.abs()) * 0.92;
 
-    let bulbs = (span / 21.0).round().max(1.0);
-    let gap = span / bulbs;
-    let first = (lx / gap).floor();
-    let total = count * bulbs;
+    let first = (x / layout.gap).floor();
     let mut glow = [0.0f32; 3];
+    let mut cords = [0.0f32; 4];
     let mut sockets = [0.0f32; 4];
     let mut lamps = [0.0f32; 4];
     for dj in -1..=1 {
         let j = first + dj as f32;
-        if j < 0.0 || j > total - 1.0 {
+        if j < 0.0 || j > layout.total as f32 - 1.0 {
             continue;
         }
-        let bx = INSET + (j + 0.5) * gap;
-        let span_index = (j / bulbs).floor();
-        let tb = (bx - INSET - span_index * span) / span;
-        let wy = rise + sag * 4.0 * tb * (1.0 - tb);
+        let bx = (j + 0.5) * layout.gap;
+        let (wy, _) = wire_at(bx, &layout, lifts);
+        let theta = angles.get(j as usize).copied().unwrap_or(0.0);
+        let (sn, cs) = theta.sin_cos();
+        let (dx, dy) = (x - bx, y - wy);
+        // The bulb's own axes: down along its cord, and across it.
+        let (lx, ly) = (dx * cs - dy * sn, dx * sn + dy * cs);
         let tint = GARLAND_COLORS[((fx_hash(j, seed * 91.0) * 5.0) as usize).min(4)];
         let phase = fx_hash(j + 11.0, seed * 7.0) * 6.2832;
         let level = 0.5 + 0.5 * (time * 2.3 + phase + j * 0.7).sin();
         let level = 0.3 + 0.7 * level * level;
-        let (dx, dy) = (x - bx, y - (wy + 6.2));
-        let halo = (-(dx * dx + dy * dy) / 130.0).exp() * 0.34 * level;
+        let (gx, gy) = (x - (bx + BULB_DROP * sn), y - (wy + BULB_DROP * cs));
+        let halo = (-(gx * gx + gy * gy) / 130.0).exp() * 0.34 * level;
         for c in 0..3 {
             glow[c] += tint[c] * halo;
         }
-        let (sx, sy) = ((x - bx).abs() - 1.25, (y - (wy + 2.4)).abs() - 1.6);
+        let cord = saturate(0.95 - lx.abs() * 1.6) * saturate(ly + 0.5) * saturate(BULB_DROP - 4.6 - ly);
+        cords = over([0.05 * cord, 0.13 * cord, 0.09 * cord, cord * 0.9], cords);
+        let (sx, sy) = (lx.abs() - 1.25, (ly - (BULB_DROP - 3.8)).abs() - 1.6);
         let socket = saturate(0.5 - sx.max(sy));
         sockets = over([0.10 * socket, 0.13 * socket, 0.11 * socket, socket], sockets);
-        let (qx, qy) = (dx / 3.0, dy / 4.4);
+        let (qx, qy) = (lx / 3.0, (ly - BULB_DROP) / 4.4);
         let rr = (qx * qx + qy * qy).sqrt();
         let body = saturate((1.0 - rr) * 3.2);
         let hot = 0.55 * level * saturate(1.0 - rr * 1.4);
@@ -112,8 +153,125 @@ pub fn garland_pixel(x: f32, y: f32, width: f32, seed: f32, time: f32) -> [f32; 
     }
     let mut color = [glow[0], glow[1], glow[2], 0.0];
     color = over([0.07 * wire_a, 0.17 * wire_a, 0.12 * wire_a, wire_a], color);
+    color = over(cords, color);
     color = over(sockets, color);
     over(lamps, color)
+}
+
+/// How the bulbs of a garland swing and the wire bobs: set going by the pointer brushing them, and settling again.
+#[derive(Clone, Debug, Default)]
+pub struct Garland {
+    pub angles: Vec<f32>,
+    speeds: Vec<f32>,
+    pub lifts: Vec<f32>,
+    lift_speeds: Vec<f32>,
+    width: f32,
+    previous: Option<V2>,
+    velocity: V2,
+    /// When anything last moved: the scene is drawn at full rate meanwhile.
+    pub moved_at: f64,
+}
+
+/// How near the pointer must come to a bulb to take hold of it.
+const GARLAND_REACH: f32 = 20.0;
+
+impl Garland {
+    pub fn resize(&mut self, width: f32) {
+        let total = garland_layout(width).total;
+        self.width = width;
+        if self.angles.len() != total {
+            self.angles = vec![0.0; total];
+            self.speeds = vec![0.0; total];
+            self.lifts = vec![0.0; total];
+            self.lift_speeds = vec![0.0; total];
+        }
+    }
+
+    pub fn sprite(&self, top: f32) -> GarlandSprite {
+        GarlandSprite { anchor: V2::new(0.0, top), width: self.width, seed: 0.37, angles: self.angles.clone(), lifts: self.lifts.clone() }
+    }
+
+    /// Advances the swinging, with the pointer brushing the bulbs (`pointer` is None while it is out of reach), the
+    /// string hanging from `top` points above the bottom of the screen. Returns whether anything moves.
+    pub fn step(&mut self, dt: f32, pointer: Option<V2>, top: f32, clock: f64) -> bool {
+        let layout = garland_layout(self.width);
+        if self.angles.len() != layout.total {
+            self.resize(self.width);
+        }
+        match pointer {
+            Some(p) => {
+                if let Some(previous) = self.previous
+                    && dt > 0.0
+                {
+                    let raw = (p - previous) / dt.max(1.0 / 240.0);
+                    self.velocity += (raw - self.velocity) * (dt * 20.0).min(1.0);
+                }
+                self.previous = Some(p);
+            }
+            None => {
+                self.previous = None;
+                self.velocity = V2::ZERO;
+            }
+        }
+        let n = self.angles.len();
+        if n == 0 {
+            return false;
+        }
+        let near = pointer.is_some_and(|p| p.y > top - (GARLAND_DEPTH + GARLAND_REACH) && p.y < top + GARLAND_REACH);
+        let steps = (dt / 0.008).ceil().clamp(1.0, 8.0) as usize;
+        let h = dt / steps as f32;
+        for _ in 0..steps {
+            let (angles, lifts) = (self.angles.clone(), self.lifts.clone());
+            for j in 0..n {
+                let (left, right) = (if j > 0 { angles[j - 1] } else { 0.0 }, if j + 1 < n { angles[j + 1] } else { 0.0 });
+                let (lift_left, lift_right) = (if j > 0 { lifts[j - 1] } else { 0.0 }, if j + 1 < n { lifts[j + 1] } else { 0.0 });
+                let theta = angles[j];
+                let mut accel = -47.0 * theta.sin() - 1.1 * self.speeds[j] + 14.0 * (left + right - 2.0 * theta);
+                let mut lift_accel = -130.0 * lifts[j] - 6.0 * self.lift_speeds[j] + 70.0 * (lift_left + lift_right - 2.0 * lifts[j]);
+                if near && let Some(p) = pointer {
+                    let bx = (j as f32 + 0.5) * layout.gap;
+                    let (wy, _) = wire_at(bx, &layout, &lifts);
+                    let (sn, cs) = theta.sin_cos();
+                    let pivot = V2::new(bx, top - wy);
+                    let lamp = V2::new(bx + BULB_DROP * sn, top - wy - BULB_DROP * cs);
+                    let grip = 1.0 - ((lamp - p).length() / GARLAND_REACH).min(1.0);
+                    if grip > 0.0 {
+                        // The pointer drags the bulb along: the speed it moves across the bulb's arc.
+                        let across = (self.velocity.x * cs + self.velocity.y * sn) / BULB_DROP;
+                        accel += (across.clamp(-16.0, 16.0) - self.speeds[j]) * grip * 24.0;
+                    }
+                    let pull = 1.0 - ((pivot - p).length() / GARLAND_REACH).min(1.0);
+                    if pull > 0.0 {
+                        lift_accel += ((-self.velocity.y * 0.25).clamp(-140.0, 140.0) - self.lift_speeds[j]) * pull * 24.0;
+                    }
+                }
+                self.speeds[j] = (self.speeds[j] + accel * h).clamp(-18.0, 18.0);
+                self.lift_speeds[j] += lift_accel * h;
+            }
+            for j in 0..n {
+                self.angles[j] += self.speeds[j] * h;
+                if self.angles[j].abs() > SWING_LIMIT {
+                    self.angles[j] = self.angles[j].clamp(-SWING_LIMIT, SWING_LIMIT);
+                    self.speeds[j] *= -0.3;
+                }
+                self.lifts[j] += self.lift_speeds[j] * h;
+                if self.lifts[j].abs() > 8.0 {
+                    self.lifts[j] = self.lifts[j].clamp(-8.0, 8.0);
+                    self.lift_speeds[j] = 0.0;
+                }
+            }
+        }
+        let active = (0..n).any(|j| self.angles[j].abs() > 0.002 || self.speeds[j].abs() > 0.04 || self.lifts[j].abs() > 0.02 || self.lift_speeds[j].abs() > 0.2);
+        if !active {
+            for values in [&mut self.angles, &mut self.speeds, &mut self.lifts, &mut self.lift_speeds] {
+                values.iter_mut().for_each(|v| *v = 0.0);
+            }
+        }
+        if active || near {
+            self.moved_at = clock;
+        }
+        active
+    }
 }
 
 // MARK: Snowmen
@@ -262,6 +420,10 @@ pub struct Ball {
     pub gone: bool,
     /// When it got its face, if it has one.
     pub adorned: Option<f64>,
+    /// Let go of at a throw's speed: it bursts where it lands or hits the edge of the screen.
+    pub thrown: bool,
+    /// How long it has been in the air since it was let go.
+    pub flight: f32,
 }
 
 impl Ball {
@@ -276,6 +438,10 @@ pub const LARGEST: f32 = 54.0;
 const GRAVITY: f32 = 2400.0;
 /// A ball thrown or dropped harder than this bursts.
 const BREAKS: f32 = 1250.0;
+/// The pointer's speed, in points a second, from which letting go of a ball throws it.
+const THROW_SPEED: f32 = 520.0;
+/// A thrown ball that lands sooner than this after it was let go (a push along the ground) just rolls on.
+const THROWN_FLIGHT: f32 = 0.12;
 
 pub fn radius_of(mass: f32) -> f32 {
     (mass.max(0.0) / DENSITY).sqrt()
@@ -497,6 +663,8 @@ impl Snowmen {
         ball.vel = V2::ZERO;
         ball.adorned = None;
         ball.settled = 0.0;
+        ball.thrown = false;
+        ball.flight = 0.0;
     }
 
     /// Starts a ball in the snow at the pointer: dragged along the ground it picks up the snow it rolls over.
@@ -514,6 +682,8 @@ impl Snowmen {
             airborne: false,
             gone: false,
             adorned: None,
+            thrown: false,
+            flight: 0.0,
         };
         self.next_id += 1;
         self.held = Some(ball.id);
@@ -534,7 +704,10 @@ impl Snowmen {
             v *= 2800.0 / speed;
         }
         let ball = &mut self.balls[i];
-        ball.vel = if speed > 220.0 { v * 0.8 } else { v * 0.2 };
+        // Let go of at speed it is a throw: it flies on and bursts at the end of it.
+        ball.thrown = speed > THROW_SPEED;
+        ball.flight = 0.0;
+        ball.vel = if speed > 220.0 { v * 0.9 } else { v * 0.2 };
         ball.airborne = true;
         ball.settled = 0.0;
     }
@@ -615,6 +788,15 @@ impl Snowmen {
         if ball.airborne {
             ball.vel.y -= GRAVITY * dt;
             ball.pos += ball.vel * dt;
+            ball.flight += dt;
+            if ball.thrown && ball.flight > THROWN_FLIGHT && (ball.pos.x < r || ball.pos.x > terrain.width() - r) {
+                // It hits the side of the screen and bursts there, the snow thrown back into the room.
+                let wall = if ball.pos.x < r { 0.0 } else { terrain.width() };
+                let back = if ball.pos.x < r { 1.0 } else { -1.0 };
+                terrain.burst(ball.mass * 0.9, V2::new(wall + back * r * 0.5, ball.pos.y.max(4.0)), V2::new(back * ball.vel.x.abs() * 0.12, ball.vel.y * 0.2));
+                self.balls[i].gone = true;
+                return true;
+            }
             if ball.pos.x < -r || ball.pos.x > terrain.width() + r || ball.pos.y < -200.0 {
                 terrain.burst(ball.mass * 0.9, V2::new(ball.pos.x.clamp(0.0, terrain.width()), 4.0), V2::ZERO);
                 self.balls[i].gone = true;
@@ -623,6 +805,12 @@ impl Snowmen {
             let (floor, _) = self.rest(ball.pos.x, r, ball.pos.y, ball.id, terrain);
             if ball.pos.y <= floor && ball.vel.y <= 0.0 {
                 let impact = -ball.vel.y;
+                if ball.thrown && ball.flight > THROWN_FLIGHT {
+                    terrain.burst(ball.mass * 0.9, V2::new(ball.pos.x, floor), V2::new(ball.vel.x * 0.35, impact * 0.15 + 60.0));
+                    self.balls[i].gone = true;
+                    return true;
+                }
+                ball.thrown = false;
                 if impact > BREAKS {
                     terrain.burst(ball.mass * 0.9, V2::new(ball.pos.x, floor), V2::new(ball.vel.x * 0.3, impact * 0.12));
                     self.balls[i].gone = true;

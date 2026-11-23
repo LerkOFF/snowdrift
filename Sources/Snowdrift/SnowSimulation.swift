@@ -675,6 +675,7 @@ final class SnowSimulation {
         )
         layers = [ground]
         frost.resize(width: width, height: height)
+        lights.resize(width: width)
         updateTarget()
     }
 
@@ -705,6 +706,7 @@ final class SnowSimulation {
         self.width = width
         self.height = height
         frost.resize(width: width, height: height)
+        lights.resize(width: width)
         updateTarget()
     }
 
@@ -773,7 +775,7 @@ final class SnowSimulation {
         }
         // Only a cursor that actually displaces snow needs the full rate; one passing near it or resting in it changes nothing.
         let pushed = clock - lastWindowMotion < 0.6 || clock - lastCursorPush < 0.3 || gust != nil || !snowballs.isEmpty || clock - hitAt < 0.6
-            || clock - snowmen.movedAt < 0.4
+            || clock - snowmen.movedAt < 0.4 || garland && clock - lights.movedAt < 0.4
         // The steady trickle off window corners is a few tiny grains at a time; they read fine at the calm rate.
         let flying = grains.count > 24 || clock < scatteredUntil || abs(slideWind) > 20
         if pushed {
@@ -1031,8 +1033,12 @@ final class SnowSimulation {
 
     // MARK: - Festive
 
-    /// A string of lights along the top of every window.
+    /// A string of lights along the top of the screen.
     var garland = false
+    /// How the bulbs swing when the pointer brushes them.
+    let lights = Garland()
+    /// Where the string hangs from, in points above the bottom of the screen: the top of it, unless a menu bar is there.
+    var garlandTop: Float?
     /// Snow settles on windows; if not, the windows carry decorations only.
     var windowSnow = true
     /// The primary mouse button is down.
@@ -1041,7 +1047,7 @@ final class SnowSimulation {
     let frost = Frost()
 
     /// Anything of the winter decorations that moves or must be drawn on its own.
-    var decorates: Bool { garland && !ledgeList.isEmpty || !snowmen.isEmpty || frost.active }
+    var decorates: Bool { garland || !snowmen.isEmpty || frost.active }
     var decorAnimates: Bool { decorates }
     var clockNow: Double { clock }
 
@@ -1057,6 +1063,7 @@ final class SnowSimulation {
         terrain.width = width
         var changed = snowmen.update(dt: dt, pointer: reachable ? point : nil, down: pointerDown, terrain: terrain, clock: clock)
         if frost.step(dt: dt, pointer: reachable ? point : nil, clock: clock) { changed = true }
+        if garland, lights.step(dt: dt, pointer: reachable ? point : nil, top: garlandTop ?? height, clock: clock) { changed = true }
         return changed
     }
 
@@ -1109,19 +1116,9 @@ final class SnowSimulation {
         stirred()
     }
 
-    /// The window edges the garlands hang from.
+    /// The string of lights along the top of the screen.
     func garlands() -> [GarlandSprite] {
-        guard garland else { return [] }
-        var result: [GarlandSprite] = []
-        for (id, ledge) in ledges where !ledge.isDock && ledge.width >= 110 {
-            result.append(GarlandSprite(
-                anchor: ledge.origin,
-                width: ledge.width,
-                seed: Float(id % 997) / 997,
-                covers: ledge.faceOccluders
-            ))
-        }
-        return result
+        garland ? [lights.sprite(top: garlandTop ?? height)] : []
     }
 
     // MARK: - Pumpkins

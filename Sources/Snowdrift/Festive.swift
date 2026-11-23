@@ -1,19 +1,166 @@
 import Foundation
 import simd
 
-// The winter decorations: a string of lights along the top of each window, snowmen the user rolls and stacks out of
-// the snow on the ground, and frost creeping in from the edges of the screen that the pointer wipes clear.
+// The winter decorations: a string of lights along the top of the screen that the pointer sets swinging, snowmen the
+// user rolls and stacks out of the snow on the ground, and frost creeping in from the edges of the screen that the
+// pointer wipes clear.
 
 // MARK: - Garland
 
-/// A string of lights hung along the top edge of a window.
+/// A string of lights hung along the top of the screen, from posts at both ends and between, its bulbs swinging when
+/// the pointer brushes them.
 struct GarlandSprite {
-    /// The left end of the window's top edge, in overlay coordinates.
+    /// Where the string hangs from: the left end, at the top of the screen (or under the menu bar).
     var anchor: SIMD2<Float>
     var width: Float
     var seed: Float
-    /// Frames of windows in front of it.
-    var covers: [SIMD4<Float>]
+    /// How far each bulb has swung from straight down, in radians, positive towards the right.
+    var angles: [Float]
+    /// How far the wire is pulled down at each bulb, in points.
+    var lifts: [Float]
+}
+
+/// How a garland of a width is divided into swags between posts, and the swags into bulbs.
+struct GarlandLayout {
+    var spans: Float
+    var span: Float
+    var gap: Float
+    var total: Int
+
+    init(width: Float) {
+        spans = max((width / 150).rounded(), 1)
+        span = max(width, 40) / spans
+        let bulbs = max((span / 21).rounded(), 1)
+        gap = span / bulbs
+        total = Int(spans * bulbs)
+    }
+
+    /// The wire's depth below the top of the screen at x: the lift of the bulbs either side of it deepens the swag, so
+    /// the wire stays pinned at the posts.
+    func wire(at x: Float, lifts: [Float]) -> Float {
+        let k = min(max((x / span).rounded(.down), 0), spans - 1)
+        let t = min(max((x - k * span) / span, 0), 1)
+        let sag = span * 0.12 + 3 + lift(at: x, lifts)
+        return 1 + sag * 4 * t * (1 - t)
+    }
+
+    private func lift(at x: Float, _ lifts: [Float]) -> Float {
+        guard !lifts.isEmpty else { return 0 }
+        let u = x / gap - 0.5
+        let j = u.rounded(.down)
+        let f = u - j
+        func at(_ k: Float) -> Float { k < 0 ? 0 : (Int(k) < lifts.count ? lifts[Int(k)] : 0) }
+        return at(j) * (1 - f) + at(j + 1) * f
+    }
+}
+
+/// How far from the wire the middle of a bulb hangs.
+let bulbDrop: Float = 11.5
+/// How far below the top a garland reaches, in points.
+let garlandDepth: Float = 62
+
+/// How the bulbs of a garland swing and the wire bobs: set going by the pointer brushing them, and settling again.
+final class Garland {
+    private(set) var angles: [Float] = []
+    private var speeds: [Float] = []
+    private(set) var lifts: [Float] = []
+    private var liftSpeeds: [Float] = []
+    private(set) var width: Float = 0
+    private var previous: SIMD2<Float>?
+    private var velocity = SIMD2<Float>(repeating: 0)
+    /// When anything last moved: the scene is drawn at full rate meanwhile.
+    private(set) var movedAt: Double = -10
+
+    private static let reach: Float = 20
+    private static let swingLimit: Float = 1.25
+
+    func resize(width: Float) {
+        let total = GarlandLayout(width: width).total
+        self.width = width
+        guard angles.count != total else { return }
+        angles = Array(repeating: 0, count: total)
+        speeds = angles
+        lifts = angles
+        liftSpeeds = angles
+    }
+
+    func sprite(top: Float) -> GarlandSprite {
+        GarlandSprite(anchor: SIMD2(0, top), width: width, seed: 0.37, angles: angles, lifts: lifts)
+    }
+
+    /// Advances the swinging, with the pointer brushing the bulbs (`pointer` is nil while it is out of reach), the
+    /// string hanging from `top` points above the bottom of the screen. Returns whether anything moves.
+    func step(dt: Float, pointer: SIMD2<Float>?, top: Float, clock: Double) -> Bool {
+        let layout = GarlandLayout(width: width)
+        if angles.count != layout.total { resize(width: width) }
+        if let pointer {
+            if let previous, dt > 0 {
+                let raw = (pointer - previous) / max(dt, 1.0 / 240)
+                velocity += (raw - velocity) * min(1, dt * 20)
+            }
+            previous = pointer
+        } else {
+            previous = nil
+            velocity = .zero
+        }
+        let n = angles.count
+        guard n > 0 else { return false }
+        let near = pointer.map { $0.y > top - (garlandDepth + Self.reach) && $0.y < top + Self.reach } ?? false
+        let steps = min(max(Int((dt / 0.008).rounded(.up)), 1), 8)
+        let h = dt / Float(steps)
+        for _ in 0..<steps {
+            let angles = self.angles, lifts = self.lifts
+            for j in 0..<n {
+                let left = j > 0 ? angles[j - 1] : 0, right = j + 1 < n ? angles[j + 1] : 0
+                let liftLeft = j > 0 ? lifts[j - 1] : 0, liftRight = j + 1 < n ? lifts[j + 1] : 0
+                let theta = angles[j]
+                var accel = -47 * sin(theta) - 1.1 * speeds[j] + 14 * (left + right - 2 * theta)
+                var liftAccel = -130 * lifts[j] - 6 * liftSpeeds[j] + 70 * (liftLeft + liftRight - 2 * lifts[j])
+                if near, let p = pointer {
+                    let bx = (Float(j) + 0.5) * layout.gap
+                    let wy = layout.wire(at: bx, lifts: lifts)
+                    let sn = sin(theta), cs = cos(theta)
+                    let pivot = SIMD2(bx, top - wy)
+                    let lamp = SIMD2(bx + bulbDrop * sn, top - wy - bulbDrop * cs)
+                    let grip = 1 - min(simd_distance(lamp, p) / Self.reach, 1)
+                    if grip > 0 {
+                        // The pointer drags the bulb along: the speed it moves across the bulb's arc.
+                        let across = (velocity.x * cs + velocity.y * sn) / bulbDrop
+                        accel += (min(max(across, -16), 16) - speeds[j]) * grip * 24
+                    }
+                    let pull = 1 - min(simd_distance(pivot, p) / Self.reach, 1)
+                    if pull > 0 {
+                        liftAccel += (min(max(-velocity.y * 0.25, -140), 140) - liftSpeeds[j]) * pull * 24
+                    }
+                }
+                speeds[j] = min(max(speeds[j] + accel * h, -18), 18)
+                liftSpeeds[j] += liftAccel * h
+            }
+            for j in 0..<n {
+                self.angles[j] += speeds[j] * h
+                if abs(self.angles[j]) > Self.swingLimit {
+                    self.angles[j] = min(max(self.angles[j], -Self.swingLimit), Self.swingLimit)
+                    speeds[j] *= -0.3
+                }
+                self.lifts[j] += liftSpeeds[j] * h
+                if abs(self.lifts[j]) > 8 {
+                    self.lifts[j] = min(max(self.lifts[j], -8), 8)
+                    liftSpeeds[j] = 0
+                }
+            }
+        }
+        let active = (0..<n).contains { abs(angles[$0]) > 0.002 || abs(speeds[$0]) > 0.04 || abs(lifts[$0]) > 0.02 || abs(liftSpeeds[$0]) > 0.2 }
+        if !active {
+            for j in 0..<n {
+                angles[j] = 0
+                speeds[j] = 0
+                lifts[j] = 0
+                liftSpeeds[j] = 0
+            }
+        }
+        if active || near { movedAt = clock }
+        return active
+    }
 }
 
 // MARK: - Snowmen
@@ -67,6 +214,10 @@ final class Snowmen {
         var gone = false
         /// When it got its face, if it has one.
         var adorned: Double?
+        /// Let go of at a throw's speed: it bursts where it lands or hits the side of the screen.
+        var thrown = false
+        /// How long it has been in the air since it was let go.
+        var flight: Float = 0
 
         var radius: Float { Snowmen.radius(of: mass) }
     }
@@ -83,6 +234,10 @@ final class Snowmen {
     private static let gravity: Float = 2400
     /// A ball thrown or dropped harder than this bursts.
     private static let breaks: Float = 1250
+    /// The pointer's speed, in points a second, from which letting go of a ball throws it.
+    private static let throwSpeed: Float = 520
+    /// A thrown ball that lands sooner than this after it was let go (a push along the ground) just rolls on.
+    private static let thrownFlight: Float = 0.12
 
     static func radius(of mass: Float) -> Float { (max(mass, 0) / density).squareRoot() }
     static func mass(of radius: Float) -> Float { radius * radius * density }
@@ -223,6 +378,8 @@ final class Snowmen {
         balls[i].vel = .zero
         balls[i].adorned = nil
         balls[i].settled = 0
+        balls[i].thrown = false
+        balls[i].flight = 0
     }
 
     /// Starts a ball in the snow at the pointer: dragged along the ground it picks up the snow it rolls over.
@@ -245,7 +402,10 @@ final class Snowmen {
         var v = velocity
         let speed = simd_length(v)
         if speed > 2800 { v *= 2800 / speed }
-        balls[i].vel = speed > 220 ? v * 0.8 : v * 0.2
+        // Let go of at speed it is a throw: it flies on and bursts at the end of it.
+        balls[i].thrown = speed > Self.throwSpeed
+        balls[i].flight = 0
+        balls[i].vel = speed > 220 ? v * 0.9 : v * 0.2
         balls[i].airborne = true
         balls[i].settled = 0
     }
@@ -320,6 +480,16 @@ final class Snowmen {
         if ball.airborne {
             ball.vel.y -= Self.gravity * dt
             ball.pos += ball.vel * dt
+            ball.flight += dt
+            if ball.thrown && ball.flight > Self.thrownFlight && (ball.pos.x < r || ball.pos.x > terrain.width - r) {
+                // It hits the side of the screen and bursts there, the snow thrown back into the room.
+                let left = ball.pos.x < r
+                let back: Float = left ? 1 : -1
+                terrain.burst(ball.mass * 0.9, SIMD2((left ? 0 : terrain.width) + back * r * 0.5, max(ball.pos.y, 4)),
+                              SIMD2(back * abs(ball.vel.x) * 0.12, ball.vel.y * 0.2))
+                balls[i].gone = true
+                return true
+            }
             if ball.pos.x < -r || ball.pos.x > terrain.width + r || ball.pos.y < -200 {
                 terrain.burst(ball.mass * 0.9, SIMD2(min(max(ball.pos.x, 0), terrain.width), 4), .zero)
                 balls[i].gone = true
@@ -328,6 +498,12 @@ final class Snowmen {
             let floor = rest(ball.pos.x, r, y: ball.pos.y, ignoring: ball.id, terrain)
             if ball.pos.y <= floor.y && ball.vel.y <= 0 {
                 let impact = -ball.vel.y
+                if ball.thrown && ball.flight > Self.thrownFlight {
+                    terrain.burst(ball.mass * 0.9, SIMD2(ball.pos.x, floor.y), SIMD2(ball.vel.x * 0.35, impact * 0.15 + 60))
+                    balls[i].gone = true
+                    return true
+                }
+                ball.thrown = false
                 if impact > Self.breaks {
                     terrain.burst(ball.mass * 0.9, SIMD2(ball.pos.x, floor.y), SIMD2(ball.vel.x * 0.3, impact * 0.12))
                     balls[i].gone = true

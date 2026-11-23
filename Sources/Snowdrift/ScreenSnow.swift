@@ -141,9 +141,7 @@ final class ScreenSnow {
             // Behind the windows the snow still settles on them: what lies on a window's top edge is above it, in
             // plain view.
             let settled = surfaces()
-            // The string of lights hangs from the windows even where no snow settles on them.
-            var collected = settled.intersection(.tracked)
-            if simulation.garland { collected.insert(.windows) }
+            let collected = settled.intersection(.tracked)
             let tracked = !collected.isEmpty
             simulation.windowSnow = settled.contains(.windows)
             tracker.collects = collected
@@ -161,6 +159,8 @@ final class ScreenSnow {
             surfaces().contains(.windows) ? displays.borrowed(by: self) : []
         }
         renderer.stepped = { [unowned self] in
+            // The string of lights hangs under the menu bar, from the top of the screen where there is none.
+            simulation.garlandTop = Float(self.screen.visibleFrame.maxY - self.screen.frame.minY)
             catchPointer()
             displays.pass(from: self)
             plowOverlay.update(simulation.plow, screen: self.screen, like: window)
